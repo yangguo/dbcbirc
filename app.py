@@ -70,31 +70,39 @@ def main():
         search_type = st.sidebar.selectbox('搜索类型', ['案情经过'
         # , '处罚依据', '处罚人员'
         ])
+        # get cbircdetail
+        df = get_cbircdetail()
+        # get max date
+        max_date = df['date'].max()
+        # five years ago
+        five_years_ago = max_date - pd.Timedelta(days=365*5)
+
         if search_type == '案情经过':
-            # get now date
-            now_date = pd.Timestamp.now()
-            # get five years before now date
-            five_years_before = now_date - pd.Timedelta(days=365*5)
-            # input date range
-            start_date = st.sidebar.date_input('开始日期', value=five_years_before)
-            end_date = st.sidebar.date_input('结束日期', value=now_date)
-            # input wenhao keyword
-            wenhao_text = st.sidebar.text_input('文号关键词')
-            # input people keyword
-            people_text = st.sidebar.text_input('当事人关键词')
-            # input event keyword
-            event_text = st.sidebar.text_input('案情关键词')
-            # input law keyword
-            law_text = st.sidebar.text_input('处罚依据关键词')
-            # input penalty keyword
-            penalty_text = st.sidebar.text_input('处罚决定关键词')
-            # input org keyword
-            org_text = st.sidebar.text_input('处罚机关关键词')
+            col1, col2 = st.columns(2)
+
+            with col1:
+                # input date range
+                start_date = st.date_input('开始日期', value=five_years_ago) 
+                end_date = st.date_input('结束日期', value=max_date)
+                # input wenhao keyword
+                wenhao_text = st.text_input('文号关键词')
+                # input people keyword
+                people_text = st.text_input('当事人关键词')
+            
+            with col2:
+                # input event keyword
+                event_text = st.text_input('案情关键词')
+                # input law keyword
+                law_text = st.text_input('处罚依据关键词')
+                # input penalty keyword
+                penalty_text = st.text_input('处罚决定关键词')
+                # input org keyword
+                org_text = st.text_input('处罚机关关键词')
             # search button
-            searchbutton = st.sidebar.button('搜索')
+            searchbutton = st.button('搜索')
             if searchbutton:
                 # get cbircdetail
-                df=get_cbircdetail()
+                # df=get_cbircdetail()
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchcbirc(df,start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text)
                 total = len(search_df)
@@ -103,17 +111,13 @@ def main():
                 df_month = count_by_month(search_df)
                 # draw plotly figure
                 display_dfmonth(df_month)
-                st.write(search_df)
+                st.table(search_df)
         elif search_type == '处罚依据':
             # input filename keyword
             filename_text = st.sidebar.text_input('搜索文件名关键词')
-            # get now date
-            now_date = pd.Timestamp.now()
-            # get five years before now date
-            five_years_before = now_date - pd.Timedelta(days=365*5)
             # input date range
-            start_date = st.sidebar.date_input('开始日期', value=five_years_before)
-            end_date = st.sidebar.date_input('结束日期', value=now_date)
+            start_date = st.sidebar.date_input('开始日期') #value=five_years_before)
+            end_date = st.sidebar.date_input('结束日期') #value=now_date)
             # input org keyword
             org_text = st.sidebar.text_input('搜索机构关键词')
             df = get_cbircdetail()
@@ -146,13 +150,9 @@ def main():
         elif search_type == '处罚人员':
             # input filename keyword
             filename_text = st.sidebar.text_input('搜索文件名关键词')
-            # get now date
-            now_date = pd.Timestamp.now()
-            # get five years before now date
-            five_years_before = now_date - pd.Timedelta(days=365*5)
             # input date range
-            start_date = st.sidebar.date_input('开始日期', value=five_years_before)
-            end_date = st.sidebar.date_input('结束日期', value=now_date)
+            start_date = st.sidebar.date_input('开始日期')# value=five_years_before)
+            end_date = st.sidebar.date_input('结束日期')# value=now_date)
             # input org keyword
             org_text = st.sidebar.text_input('搜索机构关键词')
             
