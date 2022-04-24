@@ -27,11 +27,11 @@ def get_csvdf(penfolder, beginwith):
         df = pd.DataFrame()
     return df
 
-
+@st.cache
 def get_cbircdetail():
     pendf = get_csvdf(pencbirc, 'cbircdtl')
     # format date
-    pendf['date'] = pd.to_datetime(pendf['date']).dt.date
+    pendf['发布日期'] = pd.to_datetime(pendf['date']).dt.date
     return pendf
 
 
@@ -41,11 +41,9 @@ def get_cbircsum():
 
 
 def searchcbirc(df,start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text):
-    cols = ['date','行政处罚决定书文号', '被处罚当事人', '主要违法违规事实', '行政处罚依据', '行政处罚决定', '作出处罚决定的机关名称', '作出处罚决定的日期']
-    # convert date to datetime
-    # df['date'] = pd.to_datetime(df['date']).dt.date
+    cols = ['发布日期','行政处罚决定书文号', '被处罚当事人', '主要违法违规事实', '行政处罚依据', '行政处罚决定', '作出处罚决定的机关名称', '作出处罚决定的日期']
     # search by start_date and end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
-    searchdf=df[(df['date'] >= start_date) & (df['date'] <= end_date)
+    searchdf=df[(df['发布日期'] >= start_date) & (df['发布日期'] <= end_date)
     & (df['行政处罚决定书文号'].str.contains(wenhao_text))&
     df['被处罚当事人'].str.contains(people_text)&
     df['主要违法违规事实'].str.contains(event_text)&
@@ -53,7 +51,7 @@ def searchcbirc(df,start_date, end_date, wenhao_text, people_text, event_text, l
     df['行政处罚决定'].str.contains(penalty_text)&
     df['作出处罚决定的机关名称'].str.contains(org_text)][cols]
     # sort by date desc
-    searchdf.sort_values(by=['date'], ascending=False, inplace=True)
+    searchdf.sort_values(by=['发布日期'], ascending=False, inplace=True)
     # reset index
     searchdf.reset_index(drop=True,inplace=True)
     return searchdf
@@ -63,7 +61,7 @@ def searchcbirc(df,start_date, end_date, wenhao_text, people_text, event_text, l
 def count_by_month(df):
     df_month = df.copy()
     # count by month
-    df_month['month'] = df_month['date'].apply(lambda x: x.strftime('%Y-%m'))
+    df_month['month'] = df_month['发布日期'].apply(lambda x: x.strftime('%Y-%m'))
     df_month_count = df_month.groupby(['month']).size().reset_index(name='count')
     return df_month_count
 
