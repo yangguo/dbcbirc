@@ -27,7 +27,7 @@ def get_csvdf(penfolder, beginwith):
         df = pd.DataFrame()
     return df
 
-@st.cache
+@st.cache(suppress_st_warning=True)
 def get_cbircdetail():
     pendf = get_csvdf(pencbirc, 'cbircdtl')
     # format date

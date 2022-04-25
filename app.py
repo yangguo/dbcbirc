@@ -107,6 +107,10 @@ def main():
                 searchbutton = st.form_submit_button('搜索')
 
             if searchbutton:
+                # if text are all empty
+                if (wenhao_text == '' and people_text == '' and event_text == '' and law_text == '' and penalty_text == '' and org_text == ''):
+                    st.error('请输入搜索关键词')
+                    return
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchcbirc(df,start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text)
                 total = len(search_df)
@@ -116,6 +120,9 @@ def main():
                 # draw plotly figure
                 display_dfmonth(df_month)
                 st.table(search_df)
+                # display download button
+                st.sidebar.download_button('下载搜索结果', data=search_df.to_csv(), file_name='搜索结果.csv')
+               
         elif search_type == '处罚依据':
             # input filename keyword
             filename_text = st.sidebar.text_input('搜索文件名关键词')
