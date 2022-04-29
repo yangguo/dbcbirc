@@ -2,7 +2,7 @@ import pandas as pd
 import glob
 import plotly.express as px
 import plotly.graph_objs as go
-from utils import get_summary
+from utils import get_summary, df2aggrid
 
 # import matplotlib
 
@@ -27,7 +27,7 @@ def get_csvdf(penfolder, beginwith):
         df = pd.DataFrame()
     return df
 
-@st.cache(suppress_st_warning=True)
+# @st.cache(suppress_st_warning=True)
 def get_cbircdetail():
     pendf = get_csvdf(pencbirc, 'cbircdtl')
     # format date
@@ -71,3 +71,31 @@ def display_dfmonth(df_month):
     fig = go.Figure(data=[go.Bar(x=df_month['month'], y=df_month['count'])])
     fig.update_layout(title='处罚数量统计', xaxis_title='月份', yaxis_title='处罚数量')
     st.plotly_chart(fig)
+
+
+# display event detail
+def display_eventdetail(search_df):
+    total = len(search_df)           
+    st.sidebar.metric('总数:', total)
+    # count by month
+    df_month = count_by_month(search_df)
+    # draw plotly figure
+    display_dfmonth(df_month)
+    # st.table(search_df)
+    data=df2aggrid(search_df)
+    # display data
+    selected_rows = data["selected_rows"]
+    if selected_rows==[]:
+        st.error('请先选择查看案例')
+        return
+    # convert selected_rows to dataframe
+    selected_rows_df = pd.DataFrame(selected_rows)
+    # transpose and set column name
+    selected_rows_df = selected_rows_df.T
+    selected_rows_df.columns = ['内容']
+    # display selected rows
+    st.table(selected_rows_df)
+    # display download button
+    st.sidebar.download_button('下载搜索结果',
+                                data=search_df.to_csv(),
+                                file_name='搜索结果.csv')

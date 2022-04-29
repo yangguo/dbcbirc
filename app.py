@@ -3,10 +3,7 @@ import plotly.express as px
 import plotly.graph_objs as go
 import pandas as pd
 
-from dbcbirc import get_cbircdetail,searchcbirc,count_by_month,display_dfmonth
-
-# set page layout
-st.set_page_config(layout='wide')
+from dbcbirc import get_cbircdetail,searchcbirc,display_eventdetail
 
 def main():
 
@@ -69,6 +66,9 @@ def main():
         
     elif choice == '案例搜索':
         st.subheader('案例搜索')
+        # initialize search result in session state
+        if 'search_result' not in st.session_state:
+            st.session_state['search_result'] = None
         # choose search type
         search_type = st.sidebar.selectbox('搜索类型', ['案情经过'
         # , '处罚依据', '处罚人员'
@@ -113,16 +113,11 @@ def main():
                     return
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchcbirc(df,start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text)
-                total = len(search_df)
-                st.sidebar.write('总数:', total)
-                # count by month
-                df_month = count_by_month(search_df)
-                # draw plotly figure
-                display_dfmonth(df_month)
-                st.table(search_df)
-                # display download button
-                st.sidebar.download_button('下载搜索结果', data=search_df.to_csv(), file_name='搜索结果.csv')
-               
+                # save search_df to session state
+                st.session_state['search_result'] = search_df
+            else:
+                search_df = st.session_state['search_result']
+
         elif search_type == '处罚依据':
             # input filename keyword
             filename_text = st.sidebar.text_input('搜索文件名关键词')
@@ -151,13 +146,7 @@ def main():
             if searchbutton:
                 # search by filename, start date,end date, org,law, article, type
                 search_df = searchcbirc(df, filename_text,start_date,end_date , org_text,law_text,article_text,  type_text)
-                total = len(search_df)
-                st.sidebar.write('总数:', total)
-                # count by month
-                df_month = count_by_month(search_df)
-                # draw plotly figure
-                display_dfmonth(df_month)
-                st.write(search_df)
+
         elif search_type == '处罚人员':
             # input filename keyword
             filename_text = st.sidebar.text_input('搜索文件名关键词')
@@ -201,13 +190,13 @@ def main():
             if searchbutton:
                 # search by filename, start date,end date, org,people type, people name, people position, penalty type, penalty result, type
                 search_df = searchcbirc(df, filename_text,start_date,end_date , org_text,people_type_text, people_name_text, people_position_text, penalty_type_text, penalty_result_text, type_text)
-                total = len(search_df)
-                st.sidebar.write('总数:', total)
-                # count by month
-                df_month = count_by_month(search_df)
-                # draw plotly figure
-                display_dfmonth(df_month)
-                st.write(search_df)
+
+        if search_df is None:
+            st.error('请先搜索')
+            return
+
+        # display eventdetail
+        display_eventdetail(search_df)
 
 if __name__ == '__main__':
     main()
