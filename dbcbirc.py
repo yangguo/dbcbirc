@@ -1,19 +1,35 @@
-import pandas as pd
+import datetime
 import glob
+import json
+import os
+import random
+import time
+
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
-from utils import get_summary, df2aggrid
+import requests
+import streamlit as st
+from bs4 import BeautifulSoup
+
+from utils import df2aggrid
 
 # import matplotlib
 
-import streamlit as st
 
-
-pencbirc = 'cbirc'
+pencbirc = "cbirc"
 # mapfolder = '../temp/citygeo.csv'
 
+# choose orgname index
+org2name = {
+    "银保监会机关": "cbircsumjiguan",
+    "银保监局本级": "cbircsumbenji",
+    "银保监分局本级": "cbircsumfenju",
+}
+
+
 def get_csvdf(penfolder, beginwith):
-    files2 = glob.glob(penfolder + '**/' + beginwith + '*.csv', recursive=True)
+    files2 = glob.glob(penfolder + "**/" + beginwith + "*.csv", recursive=True)
     dflist = []
     # filelist = []
     for filepath in files2:
@@ -27,33 +43,67 @@ def get_csvdf(penfolder, beginwith):
         df = pd.DataFrame()
     return df
 
+
 # @st.cache(suppress_st_warning=True)
 def get_cbircdetail():
-    pendf = get_csvdf(pencbirc, 'cbircdtl')
+    pendf = get_csvdf(pencbirc, "cbircdtl")
     # format date
-    pendf['发布日期'] = pd.to_datetime(pendf['date']).dt.date
+    pendf["发布日期"] = pd.to_datetime(pendf["date"]).dt.date
     return pendf
 
 
-def get_cbircsum():
-    pendf = get_csvdf(pencbirc, 'sumevent')
+def get_cbircsum(beginwith):
+    pendf = get_csvdf(pencbirc, beginwith)
+    # format date
+    pendf["发布日期"] = pd.to_datetime(pendf["publishDate"]).dt.date
+    # get length of old eventdf
+    oldlen = len(pendf)
+    # get min and max date of old eventdf
+    min_date = pendf["发布日期"].min()
+    max_date = pendf["发布日期"].max()
+    # use metric
+    st.metric("原案例总数", oldlen)
+    st.metric("原案例日期范围", f"{min_date} - {max_date}")
+
     return pendf
 
 
-def searchcbirc(df,start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text):
-    cols = ['发布日期','行政处罚决定书文号', '被处罚当事人', '主要违法违规事实', '行政处罚依据', '行政处罚决定', '作出处罚决定的机关名称', '作出处罚决定的日期']
+def searchcbirc(
+    df,
+    start_date,
+    end_date,
+    wenhao_text,
+    people_text,
+    event_text,
+    law_text,
+    penalty_text,
+    org_text,
+):
+    cols = [
+        "发布日期",
+        "行政处罚决定书文号",
+        "被处罚当事人",
+        "主要违法违规事实",
+        "行政处罚依据",
+        "行政处罚决定",
+        "作出处罚决定的机关名称",
+        "作出处罚决定的日期",
+    ]
     # search by start_date and end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
-    searchdf=df[(df['发布日期'] >= start_date) & (df['发布日期'] <= end_date)
-    & (df['行政处罚决定书文号'].str.contains(wenhao_text))&
-    df['被处罚当事人'].str.contains(people_text)&
-    df['主要违法违规事实'].str.contains(event_text)&
-    df['行政处罚依据'].str.contains(law_text)&
-    df['行政处罚决定'].str.contains(penalty_text)&
-    df['作出处罚决定的机关名称'].str.contains(org_text)][cols]
+    searchdf = df[
+        (df["发布日期"] >= start_date)
+        & (df["发布日期"] <= end_date)
+        & (df["行政处罚决定书文号"].str.contains(wenhao_text))
+        & df["被处罚当事人"].str.contains(people_text)
+        & df["主要违法违规事实"].str.contains(event_text)
+        & df["行政处罚依据"].str.contains(law_text)
+        & df["行政处罚决定"].str.contains(penalty_text)
+        & df["作出处罚决定的机关名称"].str.contains(org_text)
+    ][cols]
     # sort by date desc
-    searchdf.sort_values(by=['发布日期'], ascending=False, inplace=True)
+    searchdf.sort_values(by=["发布日期"], ascending=False, inplace=True)
     # reset index
-    searchdf.reset_index(drop=True,inplace=True)
+    searchdf.reset_index(drop=True, inplace=True)
     return searchdf
 
 
@@ -61,41 +111,187 @@ def searchcbirc(df,start_date, end_date, wenhao_text, people_text, event_text, l
 def count_by_month(df):
     df_month = df.copy()
     # count by month
-    df_month['month'] = df_month['发布日期'].apply(lambda x: x.strftime('%Y-%m'))
-    df_month_count = df_month.groupby(['month']).size().reset_index(name='count')
+    df_month["month"] = df_month["发布日期"].apply(lambda x: x.strftime("%Y-%m"))
+    df_month_count = df_month.groupby(["month"]).size().reset_index(name="count")
     return df_month_count
 
 
 # display dfmonth in plotly
 def display_dfmonth(df_month):
-    fig = go.Figure(data=[go.Bar(x=df_month['month'], y=df_month['count'])])
-    fig.update_layout(title='处罚数量统计', xaxis_title='月份', yaxis_title='处罚数量')
+    fig = go.Figure(data=[go.Bar(x=df_month["month"], y=df_month["count"])])
+    fig.update_layout(title="处罚数量统计", xaxis_title="月份", yaxis_title="处罚数量")
     st.plotly_chart(fig)
 
 
 # display event detail
 def display_eventdetail(search_df):
-    total = len(search_df)           
-    st.sidebar.metric('总数:', total)
+    total = len(search_df)
+    st.sidebar.metric("总数:", total)
     # count by month
     df_month = count_by_month(search_df)
     # draw plotly figure
     display_dfmonth(df_month)
     # st.table(search_df)
-    data=df2aggrid(search_df)
+    data = df2aggrid(search_df)
     # display data
     selected_rows = data["selected_rows"]
-    if selected_rows==[]:
-        st.error('请先选择查看案例')
-        return
+    if selected_rows == []:
+        st.error("请先选择查看案例")
+        st.stop()
     # convert selected_rows to dataframe
     selected_rows_df = pd.DataFrame(selected_rows)
     # transpose and set column name
     selected_rows_df = selected_rows_df.T
-    selected_rows_df.columns = ['内容']
+    selected_rows_df.columns = ["内容"]
     # display selected rows
     st.table(selected_rows_df)
     # display download button
-    st.sidebar.download_button('下载搜索结果',
-                                data=search_df.to_csv(),
-                                file_name='搜索结果.csv')
+    st.sidebar.download_button("下载搜索结果", data=search_df.to_csv(), file_name="搜索结果.csv")
+
+
+# get sumeventdf in page number range
+def get_sumeventdf(orgname, start, end):
+    # choose orgname index
+    org_index = {"银保监会机关": "4113", "银保监局本级": "4114", "银保监分局本级": "4115"}
+    org_name_index = org_index[orgname]
+
+    baseurl = (
+        "https://www.cbirc.gov.cn/cbircweb/DocInfo/SelectDocByItemIdAndChild?itemId="
+        + org_name_index
+        + "&pageSize=18&pageIndex="
+    )
+
+    resultls = []
+    errorls = []
+    count = 0
+    for i in range(start, end + 1):
+        st.info("page: " + str(i))
+        st.info(str(count) + " begin")
+        url = baseurl + str(i)
+        st.info("url:" + url)
+        try:
+            dd = requests.get(url, verify=False)
+            sd = BeautifulSoup(dd.content, "html.parser")
+
+            json_data = json.loads(str(sd.text))
+
+            datals = json_data["data"]["rows"]
+
+            df = pd.DataFrame(datals)
+            resultls.append(df)
+        except Exception as e:
+            st.error("error!: " + str(e))
+            errorls.append(url)
+
+        mod = (i + 1) % 2
+        if mod == 0 and count > 0:
+            tempdf = pd.concat(resultls)
+            savename = "tempsum-" + org_name_index + str(count + 1)
+            savedf(tempdf, savename)
+
+        wait = random.randint(2, 20)
+        time.sleep(wait)
+        st.info("finish: " + str(count))
+        count += 1
+
+    circdf = pd.concat(resultls)
+    savecsv = "tempsumall" + org_name_index + str(count)
+    savedf(circdf, savecsv)
+    return circdf
+
+
+def savedf(df, basename):
+    savename = basename + ".csv"
+    savepath = os.path.join(pencbirc, savename)
+    df.to_csv(savepath)
+
+
+# update sumeventdf
+def update_sumeventdf(currentsum, orgname):
+    org_name_index = org2name[orgname]
+
+    oldsum = get_cbircsum(org_name_index)
+    if oldsum.empty:
+        oldidls = []
+    else:
+        oldidls = oldsum["docId"].tolist()
+    currentidls = currentsum["docId"].tolist()
+    # print('oldidls:',oldidls)
+    # print('currentidls:', currentidls)
+    # get current idls not in oldidls
+    newidls = [x for x in currentidls if x not in oldidls]
+    # print('newidls:', newidls)
+    # newidls=list(set(currentidls)-set(oldidls))
+    newdf = currentsum[currentsum["docId"].isin(newidls)]
+    # if newdf is not empty, save it
+    if newdf.empty is False:
+        newdf.reset_index(drop=True, inplace=True)
+        nowstr = get_now()
+        savename = org_name_index + nowstr
+        savedf(newdf, savename)
+    return newdf
+
+
+# get current date and time string
+def get_now():
+    now = datetime.datetime.now()
+    now_str = now.strftime("%Y%m%d%H%M%S")
+    return now_str
+
+
+# get event detail
+def get_eventdetail(eventsum, orgname):
+    org_name_index = org2name[orgname]
+
+    docidls = eventsum["docId"].tolist()
+
+    baseurl = (
+        "https://www.cbirc.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId="
+    )
+
+    resultls = []
+    errorls = []
+    count = 0
+    for i in docidls:
+        st.info("id: " + str(i))
+        st.info(str(count) + " begin")
+        url = baseurl + str(i) + ".json"
+        st.info("url:" + url)
+        try:
+            dd = requests.get(url, verify=False)
+            sd = BeautifulSoup(dd.content, "html.parser")
+
+            json_data = json.loads(str(sd.text))
+
+            title = json_data["data"]["docTitle"]
+            subtitle = json_data["data"]["docSubtitle"]
+            date = json_data["data"]["publishDate"]
+            doc = json_data["data"]["docClob"]
+            datals = {"title": title, "subtitle": subtitle, "date": date, "doc": doc}
+
+            df = pd.DataFrame(datals, index=[0])
+            df["id"] = i
+            resultls.append(df)
+        except Exception as e:
+            st.error("error!: " + str(e))
+            st.error("check url:" + url)
+            errorls.append(i)
+
+        mod = (count + 1) % 10
+        if mod == 0 and count > 0:
+            tempdf = pd.concat(resultls)
+            savename = "tempdtl-" + org_name_index + str(count + 1)
+            savedf(tempdf, savename)
+
+        wait = random.randint(2, 20)
+        time.sleep(wait)
+        st.info("finish: " + str(count))
+        count += 1
+    # if resultls is not empty, save it
+    if resultls:
+        circdf = pd.concat(resultls)
+        savecsv = "cbircdtlall" + org_name_index + str(count)
+        savedf(circdf, savecsv)
+    else:
+        circdf = pd.DataFrame()
+    return circdf

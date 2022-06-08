@@ -137,3 +137,7 @@ dmypy.json
 
 # ignore csv files
 *.csv
+.flake8
+.isort.cfg
+.markdownlint.yaml
+.trunk
