@@ -1,16 +1,17 @@
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objs as go
 import streamlit as st
 
 from dbcbirc import (
     display_eventdetail,
+    get_cbircanalysis,
     get_cbircdetail,
     get_cbircsum,
     get_eventdetail,
     get_sumeventdf,
     searchcbirc,
+    searchdtl,
     update_sumeventdf,
+    display_cbircsum
 )
 
 
@@ -26,13 +27,28 @@ def main():
         st.subheader("案例更新")
         # jiguan oldsum
         st.markdown("#### 银保监会机关")
-        oldsumjiguan = get_cbircsum("cbircsumjiguan")
+        st.markdown("列表")
+        oldsumjiguan = get_cbircsum("jiguan")
+        display_cbircsum(oldsumjiguan)
+        st.markdown("详情")
+        dtljiguan=get_cbircdetail('jiguan')
+        display_cbircsum(dtljiguan)
         # benji oldsum
         st.markdown("#### 银保监局本级")
-        oldsumbenji = get_cbircsum("cbircsumbenji")
+        st.markdown("列表")
+        oldsumbenji = get_cbircsum("benji")
+        display_cbircsum(oldsumbenji)
+        st.markdown("详情")
+        dtlbenji=get_cbircdetail('benji')
+        display_cbircsum(dtlbenji)
         # fenju oldsum
         st.markdown("#### 银保监分局本级")
-        oldsumfenju = get_cbircsum("cbircsumfenju")
+        st.markdown("列表")
+        oldsumfenju = get_cbircsum("fenju")
+        display_cbircsum(oldsumfenju)
+        st.markdown("详情")
+        dtlfenju=get_cbircdetail('fenju')
+        display_cbircsum(dtlfenju)
 
         with st.sidebar.form("更新案例"):
             # choose orgname index
@@ -46,25 +62,26 @@ def main():
             end_num = int(end_num)
             # button to scrapy web
             sumeventbutton = st.form_submit_button("更新案例")
+
         if sumeventbutton:
             # get sumeventdf
             sumeventdf = get_sumeventdf(org_name, start_num, end_num)
             # get length of sumeventdf
             length = len(sumeventdf)
             # display length
-            st.write(f"更新了{length}条案例")
+            st.success(f"获取了{length}条案例")
             # update sumeventdf
             newsum = update_sumeventdf(sumeventdf, org_name)
             # get length of newsum
             sumevent_len = len(newsum)
             # display sumeventdf
-            st.sidebar.success(f"更新完成，共{sumevent_len}条案例列表")
+            st.success(f"共{sumevent_len}条案例待更新")
             # get event detail
             eventdetail = get_eventdetail(newsum, org_name)
             # get length of eventdetail
             eventdetail_len = len(eventdetail)
             # display eventdetail
-            st.sidebar.success(f"更新完成，共{eventdetail_len}条案例详情")
+            st.success(f"更新完成，共{eventdetail_len}条案例详情")
 
     elif choice == "案例搜索":
         st.subheader("案例搜索")
@@ -75,20 +92,20 @@ def main():
         search_type = st.sidebar.selectbox(
             "搜索类型",
             [
-                "案情经过"
-                # , '处罚依据', '处罚人员'
+                "案情经过",
+                "案情分类",
             ],
         )
-        # get cbircdetail
-        df = get_cbircdetail()
-        # get max date
-        max_date = df["发布日期"].max()
-        # five years ago
-        five_years_ago = max_date - pd.Timedelta(days=365 * 5)
 
-        if search_type == "案情经过":
+        if search_type == "案情分类":
+            # get cbircdetail
+            df = get_cbircanalysis()
+            # get max date
+            max_date = df["发布日期"].max()
+            # five years ago
+            five_years_ago = max_date - pd.Timedelta(days=365 * 5)
             # use form
-            with st.form("搜索案例"):
+            with st.form("案情分类"):
                 col1, col2 = st.columns(2)
 
                 with col1:
@@ -141,99 +158,49 @@ def main():
             else:
                 search_df = st.session_state["search_result"]
 
-        elif search_type == "处罚依据":
-            # input filename keyword
-            filename_text = st.sidebar.text_input("搜索文件名关键词")
-            # input date range
-            start_date = st.sidebar.date_input("开始日期")  # value=five_years_before)
-            end_date = st.sidebar.date_input("结束日期")  # value=now_date)
-            # input org keyword
-            org_text = st.sidebar.text_input("搜索机构关键词")
-            df = get_cbircdetail()
-            # get law list
-            law_list = df["法律法规"].unique()
-            # get law
-            law_text = st.sidebar.multiselect("法律法规", law_list)
-            if law_text == []:
-                law_text = law_list
-            # input article keyword
-            article_text = st.sidebar.text_input("搜索条文号")
-            # get type list
-            type_list = df["文书类型"].unique()
-            # get type
-            type_text = st.sidebar.multiselect("文书类型", type_list)
-            if type_text == []:
-                type_text = type_list
-            # search button
-            searchbutton = st.sidebar.button("搜索")
+        elif search_type == "案情经过":
+            # get cbircdetail
+            df = get_cbircdetail('')
+            # get max date
+            max_date = df["发布日期"].max()
+            # five years ago
+            five_years_ago = max_date - pd.Timedelta(days=365 * 5)
+            with st.form("案情经过"):
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    # input date range
+                    start_date = st.date_input("开始日期", value=five_years_ago)
+                    # input title keyword
+                    title_text = st.text_input("标题")
+                    # input event keyword
+                    event_text = st.text_input("案情关键词")
+
+                with col2:
+                    end_date = st.date_input("结束日期", value=max_date)
+                    # input wenhao keyword
+                    wenhao_text = st.text_input("文号")
+                # search button
+                searchbutton = st.form_submit_button("搜索")
+
             if searchbutton:
-                # search by filename, start date,end date, org,law, article, type
-                search_df = searchcbirc(
+                # if text are all empty
+                if title_text == "" and event_text == "" and wenhao_text == "":
+                    st.error("请输入搜索关键词")
+                    st.stop()
+                # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
+                search_df = searchdtl(
                     df,
-                    filename_text,
                     start_date,
                     end_date,
-                    org_text,
-                    law_text,
-                    article_text,
-                    type_text,
+                    title_text,
+                    wenhao_text,
+                    event_text,
                 )
-
-        elif search_type == "处罚人员":
-            # input filename keyword
-            filename_text = st.sidebar.text_input("搜索文件名关键词")
-            # input date range
-            start_date = st.sidebar.date_input("开始日期")  # value=five_years_before)
-            end_date = st.sidebar.date_input("结束日期")  # value=now_date)
-            # input org keyword
-            org_text = st.sidebar.text_input("搜索机构关键词")
-
-            df = get_cbircdetail()
-            # get people type list
-            people_type_list = df["当事人类型"].unique()
-            # get people type
-            people_type_text = st.sidebar.multiselect("当事人类型", people_type_list)
-            if people_type_text == []:
-                people_type_text = people_type_list
-            # get people name
-            people_name_text = st.sidebar.text_input("搜索当事人名称")
-            # get people position list
-            people_position_list = df["当事人身份"].unique()
-            # get people position
-            people_position_text = st.sidebar.multiselect("当事人身份", people_position_list)
-            if people_position_text == []:
-                people_position_text = people_position_list
-            # get penalty type list
-            penalty_type_list = df["违规类型"].unique()
-            # get penalty type
-            penalty_type_text = st.sidebar.multiselect("违规类型", penalty_type_list)
-            if penalty_type_text == []:
-                penalty_type_text = penalty_type_list
-            # get penalty result
-            penalty_result_text = st.sidebar.text_input("搜索处罚结果")
-            # get type list
-            type_list = df["文书类型"].unique()
-            # get type
-            type_text = st.sidebar.multiselect("处罚类型", type_list)
-            if type_text == []:
-                type_text = type_list
-            # search button
-            searchbutton = st.sidebar.button("搜索")
-            if searchbutton:
-                # search by filename, start date,end date, org,people type, people name, people position, penalty type, penalty result, type
-                search_df = searchcbirc(
-                    df,
-                    filename_text,
-                    start_date,
-                    end_date,
-                    org_text,
-                    people_type_text,
-                    people_name_text,
-                    people_position_text,
-                    penalty_type_text,
-                    penalty_result_text,
-                    type_text,
-                )
+                # save search_df to session state
+                st.session_state["search_result"] = search_df
+            else:
+                search_df = st.session_state["search_result"]
 
         if search_df is None:
             st.error("请先搜索")

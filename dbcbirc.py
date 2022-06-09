@@ -22,9 +22,9 @@ pencbirc = "cbirc"
 
 # choose orgname index
 org2name = {
-    "银保监会机关": "cbircsumjiguan",
-    "银保监局本级": "cbircsumbenji",
-    "银保监分局本级": "cbircsumfenju",
+    "银保监会机关": "jiguan",
+    "银保监局本级": "benji",
+    "银保监分局本级": "fenju",
 }
 
 
@@ -45,26 +45,42 @@ def get_csvdf(penfolder, beginwith):
 
 
 # @st.cache(suppress_st_warning=True)
-def get_cbircdetail():
-    pendf = get_csvdf(pencbirc, "cbircdtl")
+def get_cbircanalysis():
+    pendf = get_csvdf(pencbirc, "cbircanalysis")
     # format date
     pendf["发布日期"] = pd.to_datetime(pendf["date"]).dt.date
     return pendf
 
 
-def get_cbircsum(beginwith):
+def get_cbircdetail(orgname):
+    beginwith='cbircdtl'+orgname
+    d0 = get_csvdf(pencbirc, beginwith)
+    # reset index
+    d1 = d0[["title", "subtitle", "date", "doc"]].reset_index(drop=True)
+    # format date
+    d1["date"] = pd.to_datetime(d1["date"]).dt.date
+    # update column name
+    d1.columns = ["标题", "文号", "发布日期", "内容"]
+    return d1
+
+
+def display_cbircsum(df):
+    # get length of old eventdf
+    oldlen = len(df)
+    # get min and max date of old eventdf
+    min_date = df["发布日期"].min()
+    max_date = df["发布日期"].max()
+    # use metric for length and date
+    col1, col2 = st.columns([1,3])
+    col1.metric("案例总数", oldlen)
+    col2.metric("日期范围", f"{min_date} - {max_date}")
+
+
+def get_cbircsum(orgname):
+    beginwith='cbircsum'+orgname
     pendf = get_csvdf(pencbirc, beginwith)
     # format date
     pendf["发布日期"] = pd.to_datetime(pendf["publishDate"]).dt.date
-    # get length of old eventdf
-    oldlen = len(pendf)
-    # get min and max date of old eventdf
-    min_date = pendf["发布日期"].min()
-    max_date = pendf["发布日期"].max()
-    # use metric
-    st.metric("原案例总数", oldlen)
-    st.metric("原案例日期范围", f"{min_date} - {max_date}")
-
     return pendf
 
 
@@ -99,6 +115,31 @@ def searchcbirc(
         & df["行政处罚依据"].str.contains(law_text)
         & df["行政处罚决定"].str.contains(penalty_text)
         & df["作出处罚决定的机关名称"].str.contains(org_text)
+    ][cols]
+    # sort by date desc
+    searchdf.sort_values(by=["发布日期"], ascending=False, inplace=True)
+    # reset index
+    searchdf.reset_index(drop=True, inplace=True)
+    return searchdf
+
+
+# search by title, subtitle, date, doc
+def searchdtl(
+    df,
+    start_date,
+    end_date,
+    title_text,
+    wenhao_text,
+    event_text,
+):
+    cols = ["标题", "文号", "发布日期", "内容"]
+    # search by start_date and end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
+    searchdf = df[
+        (df["发布日期"] >= start_date)
+        & (df["发布日期"] <= end_date)
+        & (df["标题"].str.contains(title_text))
+        & (df["文号"].str.contains(wenhao_text))
+        & (df["内容"].str.contains(event_text))
     ][cols]
     # sort by date desc
     searchdf.sort_values(by=["发布日期"], ascending=False, inplace=True)
@@ -227,7 +268,7 @@ def update_sumeventdf(currentsum, orgname):
     if newdf.empty is False:
         newdf.reset_index(drop=True, inplace=True)
         nowstr = get_now()
-        savename = org_name_index + nowstr
+        savename = "cbircsum" + org_name_index + nowstr
         savedf(newdf, savename)
     return newdf
 
@@ -290,7 +331,7 @@ def get_eventdetail(eventsum, orgname):
     # if resultls is not empty, save it
     if resultls:
         circdf = pd.concat(resultls)
-        savecsv = "cbircdtlall" + org_name_index + str(count)
+        savecsv = "cbircdtl" + org_name_index + get_now()
         savedf(circdf, savecsv)
     else:
         circdf = pd.DataFrame()
