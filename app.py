@@ -86,8 +86,8 @@ def main():
     elif choice == "案例搜索":
         st.subheader("案例搜索")
         # initialize search result in session state
-        if "search_result" not in st.session_state:
-            st.session_state["search_result"] = None
+        if "search_result_cbirc" not in st.session_state:
+            st.session_state["search_result_cbirc"] = None
         # choose search type
         search_type = st.sidebar.selectbox(
             "搜索类型",
@@ -154,9 +154,9 @@ def main():
                     org_text,
                 )
                 # save search_df to session state
-                st.session_state["search_result"] = search_df
+                st.session_state["search_result_cbirc"] = search_df
             else:
-                search_df = st.session_state["search_result"]
+                search_df = st.session_state["search_result_cbirc"]
 
         elif search_type == "案情经过":
             # get cbircdetail
@@ -198,9 +198,9 @@ def main():
                     event_text,
                 )
                 # save search_df to session state
-                st.session_state["search_result"] = search_df
+                st.session_state["search_result_cbirc"] = search_df
             else:
-                search_df = st.session_state["search_result"]
+                search_df = st.session_state["search_result_cbirc"]
 
         if search_df is None:
             st.error("请先搜索")
