@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 
 from dbcbirc import (
+    display_cbircsum,
     display_eventdetail,
     get_cbircanalysis,
     get_cbircdetail,
@@ -11,7 +12,6 @@ from dbcbirc import (
     searchcbirc,
     searchdtl,
     update_sumeventdf,
-    display_cbircsum
 )
 
 
@@ -31,7 +31,7 @@ def main():
         oldsumjiguan = get_cbircsum("jiguan")
         display_cbircsum(oldsumjiguan)
         st.markdown("详情")
-        dtljiguan=get_cbircdetail('jiguan')
+        dtljiguan = get_cbircdetail("jiguan")
         display_cbircsum(dtljiguan)
         # benji oldsum
         st.markdown("#### 银保监局本级")
@@ -39,7 +39,7 @@ def main():
         oldsumbenji = get_cbircsum("benji")
         display_cbircsum(oldsumbenji)
         st.markdown("详情")
-        dtlbenji=get_cbircdetail('benji')
+        dtlbenji = get_cbircdetail("benji")
         display_cbircsum(dtlbenji)
         # fenju oldsum
         st.markdown("#### 银保监分局本级")
@@ -47,7 +47,7 @@ def main():
         oldsumfenju = get_cbircsum("fenju")
         display_cbircsum(oldsumfenju)
         st.markdown("详情")
-        dtlfenju=get_cbircdetail('fenju')
+        dtlfenju = get_cbircdetail("fenju")
         display_cbircsum(dtlfenju)
 
         with st.sidebar.form("更新案例"):
@@ -88,8 +88,8 @@ def main():
         # initialize search result in session state
         if "search_result_cbirc" not in st.session_state:
             st.session_state["search_result_cbirc"] = None
-        # choose search type
-        search_type = st.sidebar.selectbox(
+        # choose search type using radio
+        search_type = st.sidebar.radio(
             "搜索类型",
             [
                 "案情经过",
@@ -160,7 +160,7 @@ def main():
 
         elif search_type == "案情经过":
             # get cbircdetail
-            df = get_cbircdetail('')
+            df = get_cbircdetail("")
             # get max date
             max_date = df["发布日期"].max()
             # five years ago

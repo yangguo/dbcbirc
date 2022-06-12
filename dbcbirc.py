@@ -6,11 +6,12 @@ import random
 import time
 
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objs as go
 import requests
 import streamlit as st
 from bs4 import BeautifulSoup
+from pyecharts import options as opts
+from pyecharts.charts import Bar
+from streamlit_echarts import st_pyecharts
 
 from utils import df2aggrid
 
@@ -53,7 +54,7 @@ def get_cbircanalysis():
 
 
 def get_cbircdetail(orgname):
-    beginwith='cbircdtl'+orgname
+    beginwith = "cbircdtl" + orgname
     d0 = get_csvdf(pencbirc, beginwith)
     # reset index
     d1 = d0[["title", "subtitle", "date", "doc"]].reset_index(drop=True)
@@ -71,13 +72,13 @@ def display_cbircsum(df):
     min_date = df["发布日期"].min()
     max_date = df["发布日期"].max()
     # use metric for length and date
-    col1, col2 = st.columns([1,3])
+    col1, col2 = st.columns([1, 3])
     col1.metric("案例总数", oldlen)
     col2.metric("日期范围", f"{min_date} - {max_date}")
 
 
 def get_cbircsum(orgname):
-    beginwith='cbircsum'+orgname
+    beginwith = "cbircsum" + orgname
     pendf = get_csvdf(pencbirc, beginwith)
     # format date
     pendf["发布日期"] = pd.to_datetime(pendf["publishDate"]).dt.date
@@ -158,22 +159,56 @@ def count_by_month(df):
 
 
 # display dfmonth in plotly
-def display_dfmonth(df_month):
-    fig = go.Figure(data=[go.Bar(x=df_month["month"], y=df_month["count"])])
-    fig.update_layout(title="处罚数量统计", xaxis_title="月份", yaxis_title="处罚数量")
-    st.plotly_chart(fig)
+def display_dfmonth(df):
+    df_month = df.copy()
+    # count by month
+    df_month["month"] = df_month["发布日期"].apply(lambda x: x.strftime("%Y-%m"))
+    df_month_count = df_month.groupby(["month"]).size().reset_index(name="count")
+    # display checkbox to show/hide graph1
+    showgraph1 = st.sidebar.checkbox("按发文时间统计", key="showgraph1")
+
+    if showgraph1:
+        x_data = df_month_count["month"].tolist()
+        y_data = df_month_count["count"].tolist()
+        # draw echarts bar chart
+        bar = (
+            Bar()
+            .add_xaxis(xaxis_data=x_data)
+            .add_yaxis(series_name="数量", y_axis=y_data, yaxis_index=0)
+            .set_global_opts(title_opts=opts.TitleOpts(title="按发文时间统计"))
+        )
+        # use events
+        events = {
+            "click": "function(params) { console.log(params.name); return params.name }",
+            # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
+        }
+        # use events
+        yearmonth = st_pyecharts(bar, events=events)
+        # st.write(yearmonth)
+        if yearmonth is not None:
+            # get year and month value from format "%Y-%m"
+            # year = int(yearmonth.split("-")[0])
+            # month = int(yearmonth.split("-")[1])
+            # filter date by year and month
+            searchdfnew = df_month[df_month["month"] == yearmonth]
+            # drop column "month"
+            searchdfnew.drop(columns=["month"], inplace=True)
+
+            # set session state
+            st.session_state["search_result_cbirc"] = searchdfnew
 
 
 # display event detail
 def display_eventdetail(search_df):
-    total = len(search_df)
+    # draw figure
+    display_dfmonth(search_df)
+   # get search result from session
+    search_dfnew = st.session_state["search_result_cbirc"]
+    total = len(search_dfnew)
     st.sidebar.metric("总数:", total)
-    # count by month
-    df_month = count_by_month(search_df)
-    # draw plotly figure
-    display_dfmonth(df_month)
+    st.markdown("### 搜索结果")
     # st.table(search_df)
-    data = df2aggrid(search_df)
+    data = df2aggrid(search_dfnew)
     # display data
     selected_rows = data["selected_rows"]
     if selected_rows == []:

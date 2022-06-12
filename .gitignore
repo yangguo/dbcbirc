@@ -141,3 +141,4 @@ dmypy.json
 .isort.cfg
 .markdownlint.yaml
 .trunk
+*.zip
