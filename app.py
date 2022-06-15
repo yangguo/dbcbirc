@@ -57,7 +57,7 @@ def main():
             start_num = st.number_input("起始页", value=1, min_value=1)
             # convert to int
             start_num = int(start_num)
-            end_num = st.number_input("结束页", value=start_num, min_value=start_num)
+            end_num = st.number_input("结束页",value=1)
             # convert to int
             end_num = int(end_num)
             # button to scrapy web
@@ -82,6 +82,12 @@ def main():
             eventdetail_len = len(eventdetail)
             # display eventdetail
             st.success(f"更新完成，共{eventdetail_len}条案例详情")
+    
+        # button to refresh page
+        refreshbutton = st.sidebar.button("刷新页面")
+        if refreshbutton:
+            st.experimental_rerun()
+    
 
     elif choice == "案例搜索":
         st.subheader("案例搜索")
@@ -100,8 +106,15 @@ def main():
         if search_type == "案情分类":
             # get cbircdetail
             df = get_cbircanalysis()
-            # get max date
+            # get length of old eventdf
+            oldlen = len(df)
+            # get min and max date of old eventdf
+            min_date = df["发布日期"].min()
             max_date = df["发布日期"].max()
+            # use metric
+            st.sidebar.write("案例总数", oldlen)
+            st.sidebar.write("最晚发文日期", max_date)
+            st.sidebar.write("最早发文日期",min_date)
             # five years ago
             five_years_ago = max_date - pd.Timedelta(days=365 * 5)
             # use form
@@ -139,8 +152,8 @@ def main():
                     and penalty_text == ""
                     and org_text == ""
                 ):
-                    st.error("请输入搜索关键词")
-                    st.stop()
+                    st.warning("请输入搜索关键词")
+                    # st.stop()
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchcbirc(
                     df,
@@ -161,8 +174,15 @@ def main():
         elif search_type == "案情经过":
             # get cbircdetail
             df = get_cbircdetail("")
-            # get max date
+            # get length of old eventdf
+            oldlen = len(df)
+            # get min and max date of old eventdf
+            min_date = df["发布日期"].min()
             max_date = df["发布日期"].max()
+            # use metric
+            st.sidebar.write("案例总数", oldlen)
+            st.sidebar.write("最晚发文日期", max_date)
+            st.sidebar.write("最早发文日期",min_date)
             # five years ago
             five_years_ago = max_date - pd.Timedelta(days=365 * 5)
             with st.form("案情经过"):
@@ -186,8 +206,8 @@ def main():
             if searchbutton:
                 # if text are all empty
                 if title_text == "" and event_text == "" and wenhao_text == "":
-                    st.error("请输入搜索关键词")
-                    st.stop()
+                    st.warning("请输入搜索关键词")
+                    # st.stop()
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchdtl(
                     df,

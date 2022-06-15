@@ -57,11 +57,11 @@ def get_cbircdetail(orgname):
     beginwith = "cbircdtl" + orgname
     d0 = get_csvdf(pencbirc, beginwith)
     # reset index
-    d1 = d0[["title", "subtitle", "date", "doc"]].reset_index(drop=True)
+    d1 = d0[["title", "subtitle", "date", "doc",'id']].reset_index(drop=True)
     # format date
     d1["date"] = pd.to_datetime(d1["date"]).dt.date
     # update column name
-    d1.columns = ["标题", "文号", "发布日期", "内容"]
+    d1.columns = ["标题", "文号", "发布日期", "内容",'id']
     return d1
 
 
@@ -321,17 +321,18 @@ def get_eventdetail(eventsum, orgname):
 
     docidls = eventsum["docId"].tolist()
 
-    baseurl = (
-        "https://www.cbirc.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId="
-    )
-
+    # baseurl = (
+    #     "https://www.cbirc.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId="
+    # )
+    # update baseurl
+    baseurl='https://www.cbirc.gov.cn/cbircweb/DocInfo/SelectByDocId?docId='
     resultls = []
     errorls = []
     count = 0
     for i in docidls:
         st.info("id: " + str(i))
         st.info(str(count) + " begin")
-        url = baseurl + str(i) + ".json"
+        url = baseurl + str(i) #+ ".json"
         st.info("url:" + url)
         try:
             dd = requests.get(url, verify=False)
