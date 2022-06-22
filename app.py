@@ -57,7 +57,7 @@ def main():
             start_num = st.number_input("起始页", value=1, min_value=1)
             # convert to int
             start_num = int(start_num)
-            end_num = st.number_input("结束页",value=1)
+            end_num = st.number_input("结束页", value=1)
             # convert to int
             end_num = int(end_num)
             # button to scrapy web
@@ -82,12 +82,11 @@ def main():
             eventdetail_len = len(eventdetail)
             # display eventdetail
             st.success(f"更新完成，共{eventdetail_len}条案例详情")
-    
+
         # button to refresh page
         refreshbutton = st.sidebar.button("刷新页面")
         if refreshbutton:
             st.experimental_rerun()
-    
 
     elif choice == "案例搜索":
         st.subheader("案例搜索")
@@ -114,7 +113,7 @@ def main():
             # use metric
             st.sidebar.write("案例总数", oldlen)
             st.sidebar.write("最晚发文日期", max_date)
-            st.sidebar.write("最早发文日期",min_date)
+            st.sidebar.write("最早发文日期", min_date)
             # five years ago
             five_years_ago = max_date - pd.Timedelta(days=365 * 5)
             # use form
@@ -182,7 +181,7 @@ def main():
             # use metric
             st.sidebar.write("案例总数", oldlen)
             st.sidebar.write("最晚发文日期", max_date)
-            st.sidebar.write("最早发文日期",min_date)
+            st.sidebar.write("最早发文日期", min_date)
             # five years ago
             five_years_ago = max_date - pd.Timedelta(days=365 * 5)
             with st.form("案情经过"):
@@ -226,8 +225,11 @@ def main():
             st.error("请先搜索")
             st.stop()
 
-        # display eventdetail
-        display_eventdetail(search_df)
+        if len(search_df) > 0:
+            # display eventdetail
+            display_eventdetail(search_df)
+        else:
+            st.warning("没有搜索结果")
 
 
 if __name__ == "__main__":

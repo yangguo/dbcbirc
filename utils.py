@@ -44,3 +44,11 @@ def df2aggrid(df):
         #  enable_enterprise_modules=True
     )
     return ag_grid
+
+
+# split string by space into words, add brackets before and after words, combine into text
+def split_words(text):
+    words = text.split()
+    words = ["(?=.*" + word + ")" for word in words]
+    new = "".join(words)
+    return new

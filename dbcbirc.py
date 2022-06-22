@@ -13,7 +13,7 @@ from pyecharts import options as opts
 from pyecharts.charts import Bar
 from streamlit_echarts import st_pyecharts
 
-from utils import df2aggrid
+from utils import df2aggrid, split_words
 
 # import matplotlib
 
@@ -50,6 +50,8 @@ def get_cbircanalysis():
     pendf = get_csvdf(pencbirc, "cbircanalysis")
     # format date
     pendf["发布日期"] = pd.to_datetime(pendf["date"]).dt.date
+    # fillna
+    pendf.fillna("", inplace=True)
     return pendf
 
 
@@ -57,11 +59,13 @@ def get_cbircdetail(orgname):
     beginwith = "cbircdtl" + orgname
     d0 = get_csvdf(pencbirc, beginwith)
     # reset index
-    d1 = d0[["title", "subtitle", "date", "doc",'id']].reset_index(drop=True)
+    d1 = d0[["title", "subtitle", "date", "doc", "id"]].reset_index(drop=True)
     # format date
     d1["date"] = pd.to_datetime(d1["date"]).dt.date
     # update column name
-    d1.columns = ["标题", "文号", "发布日期", "内容",'id']
+    d1.columns = ["标题", "文号", "发布日期", "内容", "id"]
+    # fillna
+    d1.fillna("", inplace=True)
     return d1
 
 
@@ -106,6 +110,14 @@ def searchcbirc(
         "作出处罚决定的机关名称",
         "作出处罚决定的日期",
     ]
+    # split words
+    wenhao_text = split_words(wenhao_text)
+    people_text = split_words(people_text)
+    event_text = split_words(event_text)
+    law_text = split_words(law_text)
+    penalty_text = split_words(penalty_text)
+    org_text = split_words(org_text)
+
     # search by start_date and end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
     searchdf = df[
         (df["发布日期"] >= start_date)
@@ -134,6 +146,10 @@ def searchdtl(
     event_text,
 ):
     cols = ["标题", "文号", "发布日期", "内容"]
+    # split words
+    title_text = split_words(title_text)
+    wenhao_text = split_words(wenhao_text)
+    event_text = split_words(event_text)
     # search by start_date and end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
     searchdf = df[
         (df["发布日期"] >= start_date)
@@ -202,7 +218,7 @@ def display_dfmonth(df):
 def display_eventdetail(search_df):
     # draw figure
     display_dfmonth(search_df)
-   # get search result from session
+    # get search result from session
     search_dfnew = st.session_state["search_result_cbirc"]
     total = len(search_dfnew)
     st.sidebar.metric("总数:", total)
@@ -325,14 +341,14 @@ def get_eventdetail(eventsum, orgname):
     #     "https://www.cbirc.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId="
     # )
     # update baseurl
-    baseurl='https://www.cbirc.gov.cn/cbircweb/DocInfo/SelectByDocId?docId='
+    baseurl = "https://www.cbirc.gov.cn/cbircweb/DocInfo/SelectByDocId?docId="
     resultls = []
     errorls = []
     count = 0
     for i in docidls:
         st.info("id: " + str(i))
         st.info(str(count) + " begin")
-        url = baseurl + str(i) #+ ".json"
+        url = baseurl + str(i)  # + ".json"
         st.info("url:" + url)
         try:
             dd = requests.get(url, verify=False)
