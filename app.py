@@ -7,6 +7,7 @@ from dbcbirc import (
     get_cbircanalysis,
     get_cbircdetail,
     get_cbircsum,
+    get_cbirctoupd,
     get_eventdetail,
     get_sumeventdf,
     searchcbirc,
@@ -18,10 +19,30 @@ from dbcbirc import (
 def main():
 
     menu = [
+        "案例总数",
         "案例搜索",
         "案例更新",
     ]
     choice = st.sidebar.selectbox("选择", menu)
+
+    if choice == "案例总数":
+        st.subheader("案例总数")
+        # get cbircdetail
+        dtlall = get_cbircdetail("")
+        display_cbircsum(dtlall)
+
+        # jiguan oldsum
+        st.markdown("#### 银保监会机关")
+        dtljiguan = get_cbircdetail("jiguan")
+        display_cbircsum(dtljiguan)
+        # benji oldsum
+        st.markdown("#### 银保监局本级")
+        dtlbenji = get_cbircdetail("benji")
+        display_cbircsum(dtlbenji)
+        # fenju oldsum
+        st.markdown("#### 银保监分局本级")
+        dtlfenju = get_cbircdetail("fenju")
+        display_cbircsum(dtlfenju)
 
     if choice == "案例更新":
         st.subheader("案例更新")
@@ -61,7 +82,7 @@ def main():
             # convert to int
             end_num = int(end_num)
             # button to scrapy web
-            sumeventbutton = st.form_submit_button("更新案例")
+            sumeventbutton = st.form_submit_button("更新列表")
 
         if sumeventbutton:
             # get sumeventdf
@@ -76,8 +97,13 @@ def main():
             sumevent_len = len(newsum)
             # display sumeventdf
             st.success(f"共{sumevent_len}条案例待更新")
+
+        # update detail button
+        eventdetailbutton = st.sidebar.button("更新详情")
+        if eventdetailbutton:
+            toupd = get_cbirctoupd(org_name)
             # get event detail
-            eventdetail = get_eventdetail(newsum, org_name)
+            eventdetail = get_eventdetail(toupd, org_name)
             # get length of eventdetail
             eventdetail_len = len(eventdetail)
             # display eventdetail
@@ -111,27 +137,29 @@ def main():
             min_date = df["发布日期"].min()
             max_date = df["发布日期"].max()
             # use metric
-            st.sidebar.write("案例总数", oldlen)
-            st.sidebar.write("最晚发文日期", max_date)
-            st.sidebar.write("最早发文日期", min_date)
-            # five years ago
-            five_years_ago = max_date - pd.Timedelta(days=365 * 5)
+            # st.sidebar.write("案例总数", oldlen)
+            # st.sidebar.write("最晚发文日期", max_date)
+            # st.sidebar.write("最早发文日期", min_date)
+            # one years ago
+            one_year_ago = max_date - pd.Timedelta(days=365 * 1)
             # use form
             with st.form("案情分类"):
                 col1, col2 = st.columns(2)
 
                 with col1:
                     # input date range
-                    start_date = st.date_input("开始日期", value=five_years_ago)
-                    end_date = st.date_input("结束日期", value=max_date)
+                    start_date = st.date_input(
+                        "开始日期", value=one_year_ago, min_value=min_date
+                    )
                     # input wenhao keyword
                     wenhao_text = st.text_input("文号关键词")
                     # input people keyword
                     people_text = st.text_input("当事人关键词")
-
-                with col2:
                     # input event keyword
                     event_text = st.text_input("案情关键词")
+
+                with col2:
+                    end_date = st.date_input("结束日期", value=max_date, min_value=min_date)
                     # input law keyword
                     law_text = st.text_input("处罚依据关键词")
                     # input penalty keyword
@@ -179,24 +207,26 @@ def main():
             min_date = df["发布日期"].min()
             max_date = df["发布日期"].max()
             # use metric
-            st.sidebar.write("案例总数", oldlen)
-            st.sidebar.write("最晚发文日期", max_date)
-            st.sidebar.write("最早发文日期", min_date)
-            # five years ago
-            five_years_ago = max_date - pd.Timedelta(days=365 * 5)
+            # st.sidebar.write("案例总数", oldlen)
+            # st.sidebar.write("最晚发文日期", max_date)
+            # st.sidebar.write("最早发文日期", min_date)
+            # one years ago
+            one_year_ago = max_date - pd.Timedelta(days=365 * 1)
             with st.form("案情经过"):
                 col1, col2 = st.columns(2)
 
                 with col1:
                     # input date range
-                    start_date = st.date_input("开始日期", value=five_years_ago)
+                    start_date = st.date_input(
+                        "开始日期", value=one_year_ago, min_value=min_date
+                    )
                     # input title keyword
                     title_text = st.text_input("标题")
                     # input event keyword
                     event_text = st.text_input("案情关键词")
 
                 with col2:
-                    end_date = st.date_input("结束日期", value=max_date)
+                    end_date = st.date_input("结束日期", value=max_date, min_value=min_date)
                     # input wenhao keyword
                     wenhao_text = st.text_input("文号")
                 # search button

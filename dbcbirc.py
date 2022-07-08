@@ -28,7 +28,7 @@ org2name = {
     "银保监分局本级": "fenju",
 }
 
-
+# @st.cache(allow_output_mutation=True)
 def get_csvdf(penfolder, beginwith):
     files2 = glob.glob(penfolder + "**/" + beginwith + "*.csv", recursive=True)
     dflist = []
@@ -45,7 +45,7 @@ def get_csvdf(penfolder, beginwith):
     return df
 
 
-# @st.cache(suppress_st_warning=True)
+# @st.cache(allow_output_mutation=True)
 def get_cbircanalysis():
     pendf = get_csvdf(pencbirc, "cbircanalysis")
     # format date
@@ -55,6 +55,7 @@ def get_cbircanalysis():
     return pendf
 
 
+# @st.cache(allow_output_mutation=True)
 def get_cbircdetail(orgname):
     beginwith = "cbircdtl" + orgname
     d0 = get_csvdf(pencbirc, beginwith)
@@ -86,6 +87,13 @@ def get_cbircsum(orgname):
     pendf = get_csvdf(pencbirc, beginwith)
     # format date
     pendf["发布日期"] = pd.to_datetime(pendf["publishDate"]).dt.date
+    return pendf
+
+
+def get_cbirctoupd(orgname):
+    org_name_index = org2name[orgname]
+    beginwith = "cbirctoupd" + org_name_index
+    pendf = get_csvdf(pencbirc, beginwith)
     return pendf
 
 
@@ -181,8 +189,8 @@ def display_dfmonth(df):
     df_month["month"] = df_month["发布日期"].apply(lambda x: x.strftime("%Y-%m"))
     df_month_count = df_month.groupby(["month"]).size().reset_index(name="count")
     # display checkbox to show/hide graph1
-    showgraph1 = st.sidebar.checkbox("按发文时间统计", key="showgraph1")
-
+    # showgraph1 = st.sidebar.checkbox("按发文时间统计", key="showgraph1")
+    showgraph1 = True
     if showgraph1:
         x_data = df_month_count["month"].tolist()
         y_data = df_month_count["count"].tolist()
@@ -221,8 +229,17 @@ def display_eventdetail(search_df):
     # get search result from session
     search_dfnew = st.session_state["search_result_cbirc"]
     total = len(search_dfnew)
-    st.sidebar.metric("总数:", total)
-    st.markdown("### 搜索结果")
+    # st.sidebar.metric("总数:", total)
+    st.markdown("### 搜索结果" + "(" + str(total) + "条)")
+    # display download button
+    st.download_button(
+        "下载搜索结果", data=search_dfnew.to_csv().encode("utf_8_sig"), file_name="搜索结果.csv"
+    )
+    # display columns
+    # discols = ["发布日期", "名称", "机构", "链接"]
+    # # get display df
+    # display_df = search_dfnew[discols]
+
     # st.table(search_df)
     data = df2aggrid(search_dfnew)
     # display data
@@ -237,8 +254,6 @@ def display_eventdetail(search_df):
     selected_rows_df.columns = ["内容"]
     # display selected rows
     st.table(selected_rows_df)
-    # display download button
-    st.sidebar.download_button("下载搜索结果", data=search_df.to_csv(), file_name="搜索结果.csv")
 
 
 # get sumeventdf in page number range
@@ -321,6 +336,9 @@ def update_sumeventdf(currentsum, orgname):
         nowstr = get_now()
         savename = "cbircsum" + org_name_index + nowstr
         savedf(newdf, savename)
+        # save to update dtl list
+        toupdname = "cbirctoupd" + org_name_index
+        savedf(newdf, toupdname)
     return newdf
 
 
