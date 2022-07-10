@@ -23,6 +23,7 @@ def main():
         "案例搜索",
         "案例更新",
     ]
+    org_namels = ["银保监会机关", "银保监局本级", "银保监分局本级"]
     choice = st.sidebar.selectbox("选择", menu)
 
     if choice == "案例总数":
@@ -31,58 +32,34 @@ def main():
         dtlall = get_cbircdetail("")
         display_cbircsum(dtlall)
 
-        # jiguan oldsum
-        st.markdown("#### 银保监会机关")
-        dtljiguan = get_cbircdetail("jiguan")
-        display_cbircsum(dtljiguan)
-        # benji oldsum
-        st.markdown("#### 银保监局本级")
-        dtlbenji = get_cbircdetail("benji")
-        display_cbircsum(dtlbenji)
-        # fenju oldsum
-        st.markdown("#### 银保监分局本级")
-        dtlfenju = get_cbircdetail("fenju")
-        display_cbircsum(dtlfenju)
+        for org_name in org_namels:
+            st.markdown("#### " + org_name)
+            dtl = get_cbircdetail(org_name)
+            display_cbircsum(dtl)
 
     if choice == "案例更新":
         st.subheader("案例更新")
-        # jiguan oldsum
-        st.markdown("#### 银保监会机关")
-        st.markdown("列表")
-        oldsumjiguan = get_cbircsum("jiguan")
-        display_cbircsum(oldsumjiguan)
-        st.markdown("详情")
-        dtljiguan = get_cbircdetail("jiguan")
-        display_cbircsum(dtljiguan)
-        # benji oldsum
-        st.markdown("#### 银保监局本级")
-        st.markdown("列表")
-        oldsumbenji = get_cbircsum("benji")
-        display_cbircsum(oldsumbenji)
-        st.markdown("详情")
-        dtlbenji = get_cbircdetail("benji")
-        display_cbircsum(dtlbenji)
-        # fenju oldsum
-        st.markdown("#### 银保监分局本级")
-        st.markdown("列表")
-        oldsumfenju = get_cbircsum("fenju")
-        display_cbircsum(oldsumfenju)
-        st.markdown("详情")
-        dtlfenju = get_cbircdetail("fenju")
-        display_cbircsum(dtlfenju)
 
-        with st.sidebar.form("更新案例"):
-            # choose orgname index
-            org_name = st.selectbox("机构", ["银保监会机关", "银保监局本级", "银保监分局本级"])
-            # choose page start number and end number
-            start_num = st.number_input("起始页", value=1, min_value=1)
-            # convert to int
-            start_num = int(start_num)
-            end_num = st.number_input("结束页", value=1)
-            # convert to int
-            end_num = int(end_num)
-            # button to scrapy web
-            sumeventbutton = st.form_submit_button("更新列表")
+        for org_name in org_namels:
+            st.markdown("#### " + org_name)
+            st.markdown("列表")
+            oldsum = get_cbircsum(org_name)
+            display_cbircsum(oldsum)
+            st.markdown("详情")
+            dtl = get_cbircdetail(org_name)
+            display_cbircsum(dtl)
+
+        # choose orgname index
+        org_name = st.sidebar.selectbox("机构", ["银保监会机关", "银保监局本级", "银保监分局本级"])
+        # choose page start number and end number
+        start_num = st.sidebar.number_input("起始页", value=1, min_value=1)
+        # convert to int
+        start_num = int(start_num)
+        end_num = st.sidebar.number_input("结束页", value=1)
+        # convert to int
+        end_num = int(end_num)
+        # button to scrapy web
+        sumeventbutton = st.sidebar.button("更新列表")
 
         if sumeventbutton:
             # get sumeventdf
@@ -91,23 +68,27 @@ def main():
             length = len(sumeventdf)
             # display length
             st.success(f"获取了{length}条案例")
-            # update sumeventdf
-            newsum = update_sumeventdf(sumeventdf, org_name)
-            # get length of newsum
-            sumevent_len = len(newsum)
-            # display sumeventdf
-            st.success(f"共{sumevent_len}条案例待更新")
 
         # update detail button
         eventdetailbutton = st.sidebar.button("更新详情")
         if eventdetailbutton:
-            toupd = get_cbirctoupd(org_name)
-            # get event detail
-            eventdetail = get_eventdetail(toupd, org_name)
-            # get length of eventdetail
-            eventdetail_len = len(eventdetail)
-            # display eventdetail
-            st.success(f"更新完成，共{eventdetail_len}条案例详情")
+            # update sumeventdf
+            newsum = update_sumeventdf(org_name)
+            # get length of newsum
+            sumevent_len = len(newsum)
+            # display sumeventdf
+            st.success(f"共{sumevent_len}条案例待更新")
+            if sumevent_len > 0:
+                # get toupdate list
+                toupd = get_cbirctoupd(org_name)
+                # get event detail
+                eventdetail = get_eventdetail(toupd, org_name)
+                # get length of eventdetail
+                eventdetail_len = len(eventdetail)
+                # display eventdetail
+                st.success(f"更新完成，共{eventdetail_len}条案例详情")
+            else:
+                st.error("没有更新的案例")
 
         # button to refresh page
         refreshbutton = st.sidebar.button("刷新页面")

@@ -22,11 +22,7 @@ pencbirc = "cbirc"
 # mapfolder = '../temp/citygeo.csv'
 
 # choose orgname index
-org2name = {
-    "银保监会机关": "jiguan",
-    "银保监局本级": "benji",
-    "银保监分局本级": "fenju",
-}
+org2name = {"银保监会机关": "jiguan", "银保监局本级": "benji", "银保监分局本级": "fenju", "": ""}
 
 # @st.cache(allow_output_mutation=True)
 def get_csvdf(penfolder, beginwith):
@@ -57,7 +53,9 @@ def get_cbircanalysis():
 
 # @st.cache(allow_output_mutation=True)
 def get_cbircdetail(orgname):
-    beginwith = "cbircdtl" + orgname
+    org_name_index = org2name[orgname]
+
+    beginwith = "cbircdtl" + org_name_index
     d0 = get_csvdf(pencbirc, beginwith)
     # reset index
     d1 = d0[["title", "subtitle", "date", "doc", "id"]].reset_index(drop=True)
@@ -83,7 +81,8 @@ def display_cbircsum(df):
 
 
 def get_cbircsum(orgname):
-    beginwith = "cbircsum" + orgname
+    org_name_index = org2name[orgname]
+    beginwith = "cbircsum" + org_name_index
     pendf = get_csvdf(pencbirc, beginwith)
     # format date
     pendf["发布日期"] = pd.to_datetime(pendf["publishDate"]).dt.date
@@ -314,14 +313,16 @@ def savedf(df, basename):
 
 
 # update sumeventdf
-def update_sumeventdf(currentsum, orgname):
+def update_sumeventdf(orgname):
     org_name_index = org2name[orgname]
-
-    oldsum = get_cbircsum(org_name_index)
+    # get sumeventdf
+    currentsum = get_cbircsum(orgname)
+    # get detail
+    oldsum = get_cbircdetail(orgname)
     if oldsum.empty:
         oldidls = []
     else:
-        oldidls = oldsum["docId"].tolist()
+        oldidls = oldsum["id"].tolist()
     currentidls = currentsum["docId"].tolist()
     # print('oldidls:',oldidls)
     # print('currentidls:', currentidls)
