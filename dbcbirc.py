@@ -194,19 +194,23 @@ def display_dfmonth(df):
         x_data = df_month_count["month"].tolist()
         y_data = df_month_count["count"].tolist()
         # draw echarts bar chart
-        bar = (
-            Bar()
-            .add_xaxis(xaxis_data=x_data)
-            .add_yaxis(series_name="数量", y_axis=y_data, yaxis_index=0)
-            .set_global_opts(title_opts=opts.TitleOpts(title="按发文时间统计"))
-        )
+        # bar = (
+        #     Bar()
+        #     .add_xaxis(xaxis_data=x_data)
+        #     .add_yaxis(series_name="数量", y_axis=y_data, yaxis_index=0)
+        #     .set_global_opts(
+        #         title_opts=opts.TitleOpts(title="按发文时间统计"),
+        #         visualmap_opts=opts.VisualMapOpts(max_=max(y_data), min_=min(y_data)),
+        #     )
+        # )
+        # # use events
+        # events = {
+        #     "click": "function(params) { console.log(params.name); return params.name }",
+        #     # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
+        # }
         # use events
-        events = {
-            "click": "function(params) { console.log(params.name); return params.name }",
-            # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
-        }
-        # use events
-        yearmonth = st_pyecharts(bar, events=events)
+        # yearmonth = st_pyecharts(bar, events=events)
+        yearmonth = print_bar(x_data, y_data, "处罚数量", "按发文时间统计")
         # st.write(yearmonth)
         if yearmonth is not None:
             # get year and month value from format "%Y-%m"
@@ -313,10 +317,10 @@ def savedf(df, basename):
 
 
 # update sumeventdf
-def update_sumeventdf(orgname):
+def update_sumeventdf(currentsum, orgname):
     org_name_index = org2name[orgname]
     # get sumeventdf
-    currentsum = get_cbircsum(orgname)
+    # currentsum = get_cbirctempsum(orgname)
     # get detail
     oldsum = get_cbircdetail(orgname)
     if oldsum.empty:
@@ -337,6 +341,30 @@ def update_sumeventdf(orgname):
         nowstr = get_now()
         savename = "cbircsum" + org_name_index + nowstr
         savedf(newdf, savename)
+        # save to update dtl list
+        toupdname = "cbirctoupd" + org_name_index
+        savedf(newdf, toupdname)
+    return newdf
+
+
+# update toupd
+def update_toupd(orgname):
+    org_name_index = org2name[orgname]
+    # get sumeventdf
+    currentsum = get_cbircsum(orgname)
+    # get detail
+    oldsum = get_cbircdetail(orgname)
+    if oldsum.empty:
+        oldidls = []
+    else:
+        oldidls = oldsum["id"].tolist()
+    currentidls = currentsum["docId"].tolist()
+    # get current idls not in oldidls
+    newidls = [x for x in currentidls if x not in oldidls]
+    newdf = currentsum[currentsum["docId"].isin(newidls)]
+    # if newdf is not empty, save it
+    if newdf.empty is False:
+        newdf.reset_index(drop=True, inplace=True)
         # save to update dtl list
         toupdname = "cbirctoupd" + org_name_index
         savedf(newdf, toupdname)
@@ -407,3 +435,26 @@ def get_eventdetail(eventsum, orgname):
     else:
         circdf = pd.DataFrame()
     return circdf
+
+
+# print bar graphs
+def print_bar(x_data, y_data, y_axis_name, title):
+    # draw echarts bar chart
+    bar = (
+        Bar()
+        .add_xaxis(xaxis_data=x_data)
+        .add_yaxis(series_name=y_axis_name, y_axis=y_data, yaxis_index=0)
+        .set_global_opts(
+            title_opts=opts.TitleOpts(title=title),
+            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=-15)),
+            visualmap_opts=opts.VisualMapOpts(max_=max(y_data), min_=min(y_data)),
+        )
+    )
+    # use events
+    events = {
+        "click": "function(params) { console.log(params.name); return params.name }",
+        # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
+    }
+    # use events
+    clickevent = st_pyecharts(bar, events=events, height=400)
+    return clickevent

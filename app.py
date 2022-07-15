@@ -13,6 +13,7 @@ from dbcbirc import (
     searchcbirc,
     searchdtl,
     update_sumeventdf,
+    update_toupd,
 )
 
 
@@ -68,17 +69,23 @@ def main():
             length = len(sumeventdf)
             # display length
             st.success(f"获取了{length}条案例")
+            # update sumeventdf
+            newsum = update_sumeventdf(sumeventdf, org_name)
+            # get length of newsum
+            sumevent_len = len(newsum)
+            # display sumeventdf
+            st.success(f"共{sumevent_len}条案例待更新")
 
         # update detail button
         eventdetailbutton = st.sidebar.button("更新详情")
         if eventdetailbutton:
             # update sumeventdf
-            newsum = update_sumeventdf(org_name)
-            # get length of newsum
-            sumevent_len = len(newsum)
+            newsum = update_toupd(org_name)
+            # get length of toupd
+            newsum_len = len(newsum)
             # display sumeventdf
-            st.success(f"共{sumevent_len}条案例待更新")
-            if sumevent_len > 0:
+            st.success(f"共{newsum_len}条案例待更新")
+            if newsum_len > 0:
                 # get toupdate list
                 toupd = get_cbirctoupd(org_name)
                 # get event detail
