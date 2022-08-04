@@ -4,6 +4,7 @@ import streamlit as st
 from dbcbirc import (
     display_cbircsum,
     display_eventdetail,
+    generate_lawdf,
     get_cbircanalysis,
     get_cbircdetail,
     get_cbircsum,
@@ -12,6 +13,7 @@ from dbcbirc import (
     get_sumeventdf,
     searchcbirc,
     searchdtl,
+    update_cbircanalysis,
     update_sumeventdf,
     update_toupd,
 )
@@ -102,6 +104,21 @@ def main():
         if refreshbutton:
             st.experimental_rerun()
 
+        # convert eventdf to lawdf
+        lawdfconvert = st.sidebar.button("处罚依据分析")
+        if lawdfconvert:
+            eventdf = get_cbircdetail("")
+            lawdf = generate_lawdf(eventdf)
+            # savedf(lawdf,'lawdf')
+            st.success("处罚依据分析完成")
+            st.write(lawdf.sample(20))
+
+        # refresh data button
+        updatebutton = st.sidebar.button("拆分数据")
+        if updatebutton:
+            update_cbircanalysis(org_name)
+            st.success("数据拆分完成")
+
     elif choice == "案例搜索":
         st.subheader("案例搜索")
         # initialize search result in session state
@@ -118,7 +135,7 @@ def main():
 
         if search_type == "案情分类":
             # get cbircdetail
-            df = get_cbircanalysis()
+            df = get_cbircanalysis("")
             # get length of old eventdf
             oldlen = len(df)
             # get min and max date of old eventdf

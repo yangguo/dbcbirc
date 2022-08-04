@@ -3,8 +3,10 @@ import glob
 import json
 import os
 import random
+import re
 import time
 
+import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
@@ -42,12 +44,18 @@ def get_csvdf(penfolder, beginwith):
 
 
 # @st.cache(allow_output_mutation=True)
-def get_cbircanalysis():
-    pendf = get_csvdf(pencbirc, "cbircanalysis")
-    # format date
-    pendf["发布日期"] = pd.to_datetime(pendf["date"]).dt.date
-    # fillna
-    pendf.fillna("", inplace=True)
+def get_cbircanalysis(orgname):
+    org_name_index = org2name[orgname]
+    beginwith = "cbircanalysis" + org_name_index
+    pendf = get_csvdf(pencbirc, beginwith)
+    # if pendf is not empty
+    if len(pendf) > 0:
+        # format date
+        pendf["发布日期"] = pd.to_datetime(pendf["发布日期"]).dt.date
+        # fillna
+        pendf.fillna("", inplace=True)
+    else:
+        pendf = pd.DataFrame()
     return pendf
 
 
@@ -458,3 +466,225 @@ def print_bar(x_data, y_data, y_axis_name, title):
     # use events
     clickevent = st_pyecharts(bar, events=events, height=400)
     return clickevent
+
+
+# update the analysis data
+def update_cbircanalysis(orgname):
+    org_name_index = org2name[orgname]
+    # get cbirc detail
+    newdf = get_cbircdetail(orgname)
+    # get id list
+    newidls = newdf["id"].tolist()
+    # get cbirc analysis details
+    olddf = get_cbircanalysis(orgname)
+    # if olddf is not empty
+    if olddf.empty:
+        oldidls = []
+    else:
+        oldidls = olddf["id"].tolist()
+    # get new idls not in oldidls
+    newidls = [x for x in newidls if x not in oldidls]
+
+    upddf = newdf[newdf["id"].isin(newidls)]
+    # if newdf is not empty, save it
+    if upddf.empty is False:
+        splitdf = split_eventdoc(upddf)
+        updlen = len(splitdf)
+        st.info("拆分了" + str(updlen) + "条数据")
+        # combine with olddf
+        upddf1 = pd.concat([splitdf, olddf])
+        # # reset index
+        upddf1.reset_index(drop=True, inplace=True)
+        savename = "cbircanalysis" + org_name_index + get_now()
+        savedf(upddf1, savename)
+
+
+# extract df by regex pattern matching
+def extract_info(d1, pat):
+    cols = ["标题", "文号", "发布日期", "doc1", "id"]
+    ex1 = d1["doc1"].str.extract(pat)
+    d2 = pd.concat([d1[cols], ex1], axis=1)
+    r1 = d2[d2[0].notnull()]
+    d3 = d2[d2[0].isnull()]
+    return r1, d3
+
+
+# split info from eventdf
+def split_eventdoc(d1):
+    # clean up
+    d1["doc1"] = d1["内容"].str.replace(r"\r|\n|\t|\xa0|\u3000|\s|\xa0", "")
+    # pat1 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
+    # r1, d2 = extract_info(d1, pat1)
+    # pat2 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出行政处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
+    # r2, d3 = extract_info(d2, pat2)
+    # pat3 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出行政处罚决定的机关名称(.*)作出行政处罚决定的日期(.*)"
+    # r3, d4 = extract_info(d3, pat3)
+    # pat4 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实(.*)行政处罚依据(.*)行政处罚决定(.*)作出处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
+    # r4, d5 = extract_info(d4, pat4)
+    # pat5 = r"处罚决定书文号(.*)被处罚当事人(.*)主要违法事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出行政处罚的机关名称(.*)作出处罚决定的日期(.*)"
+    # r5, d6 = extract_info(d5, pat5)
+    # pat6 = (
+    #     r"行政处罚决定书文号(.*)被处罚当事人(.*)案由(.*)行政处罚依据(.*)行政处罚决定(.*)作出处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
+    # )
+    # r6, d7 = extract_info(d6, pat6)
+
+    pat6 = r"(?:(?:行政处罚决定书文号|处罚决定书文号|行政处罚决定书文号|行政处罚决定文书号|行政处罚决定书号|行政处罚文书号|行政处罚决定文号)(.*?))(?:被处罚当事人|被处罚人|被处罚单位|单位名称|被处罚机构情况|被处罚个人)(.*?)(?:主要违法违规事实（案由）|主要违法违规事实|主要违法事实（案由）|案由|主要违法事实)(.*)行政处罚依据(.*)(?:行政处罚决定|行政处罚种类及金额|行政处理决定|行政处罚种类)(.*)(?:作出处罚决定的机关名称|作出行政处罚的机关名称|作出行政处罚决定的机关名称|做出处罚决定的机关名称|作出处罚的机关|作出处罚决定机关名称)(.*?)(?:(?:作出处罚决定的日期|作出行政处罚决定的日期|做出处罚决定的日期|出行政处罚决定的日期|作出处罚的日期)(.*))?$"
+    r6, d7 = extract_info(d1, pat6)
+
+    pat7 = r"([^，,：、]+罚[^，,：、]*?号.?)((?:被处罚|当事人|受处罚|姓名|名称|单位).*?)((?:现场检查|经检查|根据举报|。|经抽查|我|你|近期|一、|一、违法|一、经查|我局对|依据《|根据《|经查|我局自|我局于|我局在|依据有关法律|\d{4}年\d?\d月\d?\d日起|\d{4}年\d?\d月\d?\d日至|\d{4}年).*?。)((?:依据原《|上述|你公司|你作为|上述事实|综上|我局认为|上述未|上述行为|上述违法|根据|依据《|以上行为|该公司上述).*。)(.*?)((?:\d\d\d\d|.{4})年[^，,、]*日)"
+    r7, d8 = extract_info(d7, pat7)
+    pat8 = r"((?:被处罚|当事人：|受处罚|姓名).*?)((?:。|我|你|近期|一、违法|一、经查|我局对|依据《|根据《|经查|我局自|我局于|我局在|依据有关法律|\d{4}年\d?\d月\d?\d日起|\d{4}年\d?\d月\d?\d日至|\d{4}年\d?\d月\d?\d日).*?。)((?:你公司|你作为|上述事实|综上|我局认为|上述未|上述行为|上述违法|根据|依据《|以上行为|该公司上述).*。)(.*?)((?:\d\d\d\d|.{4})年[^，,、]*日)"
+    r8, d9 = extract_info(d8, pat8)
+    pat9 = (
+        r"(.*?)((?:我分局|我会|本会|经查|你公司|依据).*?。)([^。]*?(?:依据|我局|根据).*。)(中国[^。]*)(.{4}年.*)"
+    )
+    r9, d10 = extract_info(d9, pat9)
+
+    comdf = r6
+    [["标题", "文号", "发布日期", "doc1", "id", 0, 1, 2, 3, 4, 5, 6]]
+    comdfcols = [
+        "标题",
+        "文号",
+        "发布日期",
+        "doc1",
+        "id",
+        "行政处罚决定书文号",
+        "被处罚当事人",
+        "主要违法违规事实",
+        "行政处罚依据",
+        "行政处罚决定",
+        "作出处罚决定的机关名称",
+        "作出处罚决定的日期",
+    ]
+    comdf.columns = comdfcols
+    # st.write(comdf)
+
+    r7 = generate_lawls(r7)
+    # convert column list to string
+    r7["lawls"] = r7["lawls"].apply(lambda x: "，".join(x))
+    r7.columns = [
+        "标题",
+        "文号",
+        "发布日期",
+        "doc1",
+        "id",
+        "行政处罚决定书文号",
+        "被处罚当事人",
+        "主要违法违规事实",
+        "行政处罚决定",
+        "作出处罚决定的机关名称",
+        "作出处罚决定的日期",
+        "行政处罚依据",
+    ]
+    # st.write(r7)
+
+    r8 = generate_lawls(r8)
+    # convert column list to string
+    r8["lawls"] = r8["lawls"].apply(lambda x: "，".join(x))
+    r8.columns = [
+        "标题",
+        "文号",
+        "发布日期",
+        "doc1",
+        "id",
+        "被处罚当事人",
+        "主要违法违规事实",
+        "行政处罚决定",
+        "作出处罚决定的机关名称",
+        "作出处罚决定的日期",
+        "行政处罚依据",
+    ]
+    # st.write(r8)
+
+    r9 = generate_lawls(r9)
+    # convert column list to string
+    r9["lawls"] = r9["lawls"].apply(lambda x: "，".join(x))
+    r9.columns = [
+        "标题",
+        "文号",
+        "发布日期",
+        "doc1",
+        "id",
+        "被处罚当事人",
+        "主要违法违规事实",
+        "行政处罚决定",
+        "作出处罚决定的机关名称",
+        "作出处罚决定的日期",
+        "行政处罚依据",
+    ]
+    # st.write(r9)
+    st.markdown("### 拆分失败的数量: " + str(len(d10)))
+    r10 = d10[["标题", "文号", "发布日期", "doc1", "id"]]
+    r10 = generate_lawls(r10)
+    # convert column list to string if item is list
+
+    r10["lawls"] = r10["lawls"].apply(
+        lambda x: "，".join(x) if isinstance(x, list) else x
+    )
+    r10.columns = [
+        "标题",
+        "文号",
+        "发布日期",
+        "doc1",
+        "id",
+        "行政处罚依据",
+    ]
+    r10["主要违法违规事实"] = r10["doc1"]
+    st.write(r10)
+    # combine all df
+    alldf = pd.concat([comdf, r7, r8, r9, r10])
+    return alldf
+
+
+def generate_lawls(d1):
+    compat = "(?!《).(《[^,，；。]*?》[^；。]*?第[^,，；。《]*条)"
+    compat2 = "(?!《).(《[^,，；。]*?》)"
+
+    d1["lawls"] = d1["doc1"].str.extractall(compat).groupby(level=0)[0].apply(list)
+    d1["lawls"].fillna(
+        d1["doc1"].str.extractall(compat2).groupby(level=0)[0].apply(list), inplace=True
+    )
+    return d1
+
+
+# convert eventdf to lawdf
+def generate_lawdf(d1):
+    # clean up
+    d1["doc1"] = d1["内容"].str.replace(r"\r|\n|\t|\xa0|\u3000|\s|\xa0", "")
+    # compat = "(?!《).(《[^,，；。]*?》[^；。]*?第[^,，；。《]*条)"
+    # compat2 = "(?!《).(《[^,，；。]*?》)"
+
+    # d1["lawls"] = d1["doc1"].str.extractall(compat).groupby(level=0)[0].apply(list)
+    # d1["lawls"].fillna(
+    #     d1["doc1"].str.extractall(compat2).groupby(level=0)[0].apply(list), inplace=True
+    # )
+    d1 = generate_lawls(d1)
+    d1["处理依据"] = d1["lawls"].fillna("").apply(lawls2dict)
+
+    d2 = d1[["id", "处理依据"]]
+    d3 = d2.explode("处理依据")
+    d4 = d3["处理依据"].apply(pd.Series)
+    d5 = pd.concat([d3, d4], axis=1)
+    d6 = d5.explode("条文")
+    # reset index
+    d6.reset_index(drop=True, inplace=True)
+    savedf(d6, "cbirclawdf")
+    return d6
+
+
+def lawls2dict(ls):
+    try:
+        result = []
+        for item in ls:
+            lawdict = dict()
+            lawls = re.findall(r"《(.*?)》", item)
+            #         print(lawls)
+            artls = re.findall(r"(第[^《》、和章节款（）]*?条)", item)
+            #         print(artls)
+            lawdict["法律法规"] = lawls[0]
+            lawdict["条文"] = artls
+            result.append(lawdict)
+        return result
+    except Exception as e:
+        st.error(str(e))
+        return np.nan
