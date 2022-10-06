@@ -386,6 +386,13 @@ def get_now():
     return now_str
 
 
+# get current date and time string
+def get_nowdate():
+    now = datetime.datetime.now()
+    now_str = now.strftime("%Y%m%d")
+    return now_str
+
+
 # get event detail
 def get_eventdetail(eventsum, orgname):
     org_name_index = org2name[orgname]
@@ -483,9 +490,9 @@ def update_cbircanalysis(orgname):
     else:
         oldidls = olddf["id"].tolist()
     # get new idls not in oldidls
-    newidls = [x for x in newidls if x not in oldidls]
+    updidls = [x for x in newidls if x not in oldidls]
 
-    upddf = newdf[newdf["id"].isin(newidls)]
+    upddf = newdf[newdf["id"].isin(updidls)]
     # if newdf is not empty, save it
     if upddf.empty is False:
         splitdf = split_eventdoc(upddf)
@@ -495,7 +502,7 @@ def update_cbircanalysis(orgname):
         upddf1 = pd.concat([splitdf, olddf])
         # # reset index
         upddf1.reset_index(drop=True, inplace=True)
-        savename = "cbircanalysis" + org_name_index + get_now()
+        savename = "cbircanalysis" + org_name_index
         savedf(upddf1, savename)
 
 
@@ -688,3 +695,26 @@ def lawls2dict(ls):
     except Exception as e:
         st.error(str(e))
         return np.nan
+
+
+def download_cbircsum(orgname):
+    # get orgname
+    org_name_index = org2name[orgname]
+    beginwith = "cbircsum" + org_name_index
+    oldsum = get_csvdf(pencbirc, beginwith)
+
+    beginwith = "cbircdtl" + org_name_index
+    dtl = get_csvdf(pencbirc, beginwith)
+
+    # listname
+    listname = "cbircsum" + org_name_index + get_nowdate() + ".csv"
+    # download list data
+    st.download_button(
+        "下载列表数据", data=oldsum.to_csv().encode("utf_8_sig"), file_name=listname
+    )
+    # detailname
+    detailname = "cbircdtl" + org_name_index + get_nowdate() + ".csv"
+    # download detail data
+    st.download_button(
+        "下载详情数据", data=dtl.to_csv().encode("utf_8_sig"), file_name=detailname
+    )

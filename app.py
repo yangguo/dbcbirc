@@ -4,6 +4,7 @@ import streamlit as st
 from dbcbirc import (
     display_cbircsum,
     display_eventdetail,
+    download_cbircsum,
     generate_lawdf,
     get_cbircanalysis,
     get_cbircdetail,
@@ -51,6 +52,7 @@ def main():
             st.markdown("详情")
             dtl = get_cbircdetail(org_name)
             display_cbircsum(dtl)
+            download_cbircsum(org_name)
 
         # choose orgname index
         org_name = st.sidebar.selectbox("机构", ["银保监会机关", "银保监局本级", "银保监分局本级"])
