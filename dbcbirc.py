@@ -12,7 +12,7 @@ import requests
 import streamlit as st
 from bs4 import BeautifulSoup
 from pyecharts import options as opts
-from pyecharts.charts import Bar
+from pyecharts.charts import Bar, Line
 from streamlit_echarts import st_pyecharts
 
 from utils import df2aggrid, split_words
@@ -22,7 +22,7 @@ from utils import df2aggrid, split_words
 
 pencbirc = "cbirc"
 # mapfolder = '../temp/citygeo.csv'
-
+urldtl = "https://www.cbirc.gov.cn/cn/view/pages/ItemDetail.html?docId="
 # choose orgname index
 org2name = {"银保监会机关": "jiguan", "银保监局本级": "benji", "银保监分局本级": "fenju", "": ""}
 
@@ -124,6 +124,7 @@ def searchcbirc(
         "行政处罚决定",
         "作出处罚决定的机关名称",
         "作出处罚决定的日期",
+        "id",
     ]
     # split words
     wenhao_text = split_words(wenhao_text)
@@ -160,7 +161,7 @@ def searchdtl(
     wenhao_text,
     event_text,
 ):
-    cols = ["标题", "文号", "发布日期", "内容"]
+    cols = ["标题", "文号", "发布日期", "内容", "id"]
     # split words
     title_text = split_words(title_text)
     wenhao_text = split_words(wenhao_text)
@@ -232,6 +233,104 @@ def display_dfmonth(df):
             # set session state
             st.session_state["search_result_cbirc"] = searchdfnew
 
+        # 图一解析开始
+        maxmonth = df_month["month"].max()
+        minmonth = df_month["month"].min()
+        # get total number of count
+        num_total = len(df_month["month"])
+        # get total number of month count
+        month_total = len(set(df_month["month"].tolist()))
+        # get average number of count per month count
+        num_avg = num_total / month_total
+        # get month value of max count
+        top1month = max(
+            set(df_month["month"].tolist()), key=df_month["month"].tolist().count
+        )
+        top1number = df_month["month"].tolist().count(top1month)
+
+        image1_text = (
+            "图一解析：从"
+            + minmonth
+            + "至"
+            + maxmonth
+            + "，共发生"
+            + str(num_total)
+            + "起处罚事件，"
+            + "平均每月发生"
+            + str(round(num_avg))
+            + "起处罚事件。其中"
+            + top1month
+            + "最高发生"
+            + str(top1number)
+            + "起处罚事件。"
+        )
+
+        # display total coun
+        st.markdown("##### " + image1_text)
+
+    # get eventdf sum amount by month
+    df_sum, df_sigle_penalty = sum_amount_by_month(df_month)
+
+    sum_data = df_sum["sum"].tolist()
+    line, yearmonthline = print_line(x_data, sum_data, "处罚金额", "案例金额统计")
+
+    if yearmonthline is not None:
+        # filter date by year and month
+        searchdfnew = df_month[df_month["month"] == yearmonthline]
+        # drop column "month"
+        searchdfnew.drop(columns=["month"], inplace=True)
+        # set session state
+        st.session_state["search_result_cbirc"] = searchdfnew
+        # refresh page
+        # st.experimental_rerun()
+
+    # 图四解析：
+    sum_data_number = 0  # 把案件金额的数组进行求和
+    more_than_100 = 0  # 把案件金额大于100的数量进行统计
+    case_total = 0  # 把案件的总数量进行统计
+    penaltycount = df_sigle_penalty["amount"].tolist()
+    for i in penaltycount:
+        sum_data_number = sum_data_number + i / 10000
+        if i > 100 * 10000:
+            more_than_100 = more_than_100 + 1
+        if i != 0:
+            case_total = case_total + 1
+
+    for i in sum_data:
+        sum_data_number = sum_data_number + i / 10000
+        if i > 100 * 10000:
+            more_than_100 = more_than_100 + 1
+    # sum_data_number=round(sum_data_number,2)
+    if case_total > 0:
+        avg_sum = round(sum_data_number / case_total, 2)
+    else:
+        avg_sum = 0
+    # get index of max sum
+    topsum1 = df_sum["sum"].nlargest(1)
+    topsum1_index = df_sum["sum"].idxmax()
+    # get month value of max count
+    topsum1month = df_sum.loc[topsum1_index, "month"]
+    image4_text = (
+        "图四解析：从"
+        + minmonth
+        + "至"
+        + maxmonth
+        + "，共发生罚款案件"
+        + str(case_total)
+        + "起;期间共涉及处罚金额"
+        + str(round(sum_data_number, 2))
+        + "万元，处罚事件平均处罚金额为"
+        + str(avg_sum)
+        + "万元，其中处罚金额高于100万元处罚事件共"
+        + str(more_than_100)
+        + "起。"
+        + topsum1month
+        + "发生最高处罚金额"
+        + str(round(topsum1.values[0] / 10000, 2))
+        + "万元。"
+    )
+    st.markdown("##### " + image4_text)
+
 
 # display event detail
 def display_eventdetail(search_df):
@@ -261,10 +360,29 @@ def display_eventdetail(search_df):
     # convert selected_rows to dataframe
     selected_rows_df = pd.DataFrame(selected_rows)
     # transpose and set column name
-    selected_rows_df = selected_rows_df.T
+    selected_rows_df = selected_rows_df.astype(str).T
+
     selected_rows_df.columns = ["内容"]
     # display selected rows
     st.table(selected_rows_df)
+
+    id = selected_rows[0]["id"]
+    # get event detail url
+    url = urldtl + str(id)
+    # display url
+    st.markdown("##### 案例链接")
+    st.markdown(url)
+    # get amtdf
+    amtdf = get_cbircamt()
+    # search amt by url
+    amtdata = amtdf[amtdf["id"] == id]
+    # display amount if amtdata is not empty
+    if amtdata.empty:
+        st.error("没有找到相关罚款金额信息")
+    else:
+        # display penalty amount
+        amount = amtdata["amount"].values[0]
+        st.metric("罚款金额", amount)
 
 
 # get sumeventdf in page number range
@@ -718,3 +836,47 @@ def download_cbircsum(orgname):
     st.download_button(
         "下载详情数据", data=dtl.to_csv().encode("utf_8_sig"), file_name=detailname
     )
+
+
+def get_cbircamt():
+    amtdf = get_csvdf(pencbirc, "cbircamt")
+    # process amount
+    amtdf["amount"] = amtdf["amount"].astype(float)
+    return amtdf
+
+
+def sum_amount_by_month(df):
+    amtdf = get_cbircamt()
+    df1 = pd.merge(
+        df, amtdf.drop_duplicates("id"), left_on="id", right_on="id", how="left"
+    )
+    df1["amount"] = df1["amount"].fillna(0)
+    df1["发布日期"] = pd.to_datetime(df1["发布日期"]).dt.date
+    # df=df[df['发文日期']>=pd.to_datetime('2020-01-01')]
+    df1["month"] = df1["发布日期"].apply(lambda x: x.strftime("%Y-%m"))
+    df_month_sum = df1.groupby(["month"])["amount"].sum().reset_index(name="sum")
+    df_sigle_penalty = df1[["month", "amount"]]
+    return df_month_sum, df_sigle_penalty
+
+    # print line charts
+
+
+def print_line(x_data, y_data, y_axis_name, title):
+    # draw echarts line chart
+    line = (
+        Line()
+        .add_xaxis(x_data)
+        .add_yaxis(y_axis_name, y_data, label_opts=opts.LabelOpts(is_show=True))
+        .set_global_opts(
+            title_opts=opts.TitleOpts(title=title),
+            # legend_opts=opts.LegendOpts(pos_top="48%"),
+        )
+    )
+    # use events
+    events = {
+        "click": "function(params) { console.log(params.name); return params.name }",
+        # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
+    }
+    # use events
+    clickevent = st_pyecharts(line, events=events, height=400)
+    return line, clickevent
