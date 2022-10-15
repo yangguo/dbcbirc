@@ -5,6 +5,7 @@ import os
 import random
 import re
 import time
+from ast import literal_eval
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,7 @@ from bs4 import BeautifulSoup
 from pyecharts import options as opts
 from pyecharts.charts import Bar, Line
 from streamlit_echarts import st_pyecharts
+from streamlit_tags import st_tags
 
 from utils import df2aggrid, split_words
 
@@ -114,8 +116,12 @@ def searchcbirc(
     law_text,
     penalty_text,
     org_text,
+    industry,
+    min_penalty,
 ):
     cols = [
+        "标题",
+        "文号",
         "发布日期",
         "行政处罚决定书文号",
         "被处罚当事人",
@@ -125,12 +131,13 @@ def searchcbirc(
         "作出处罚决定的机关名称",
         "作出处罚决定的日期",
         "id",
+        "label",
     ]
     # split words
     wenhao_text = split_words(wenhao_text)
     people_text = split_words(people_text)
     event_text = split_words(event_text)
-    law_text = split_words(law_text)
+    # law_text = split_words(law_text)
     penalty_text = split_words(penalty_text)
     org_text = split_words(org_text)
 
@@ -139,20 +146,25 @@ def searchcbirc(
         (df["发布日期"] >= start_date)
         & (df["发布日期"] <= end_date)
         & (df["行政处罚决定书文号"].str.contains(wenhao_text))
-        & df["被处罚当事人"].str.contains(people_text)
-        & df["主要违法违规事实"].str.contains(event_text)
-        & df["行政处罚依据"].str.contains(law_text)
-        & df["行政处罚决定"].str.contains(penalty_text)
-        & df["作出处罚决定的机关名称"].str.contains(org_text)
+        & (df["被处罚当事人"].str.contains(people_text))
+        & (df["主要违法违规事实"].str.contains(event_text))
+        # & (df["行政处罚依据"].str.contains(law_text))
+        & (df["行政处罚决定"].str.contains(penalty_text))
+        & (df["作出处罚决定的机关名称"].str.contains(org_text))
+        & (df["label"].isin(industry))
+        & (df["amount"] >= min_penalty)
+        & (df["法律法规"].isin(law_text))
     ][cols]
     # sort by date desc
     searchdf.sort_values(by=["发布日期"], ascending=False, inplace=True)
+    # drop duplicates
+    searchdf.drop_duplicates(subset=["id"], inplace=True)
     # reset index
     searchdf.reset_index(drop=True, inplace=True)
     return searchdf
 
 
-# search by title, subtitle, date, doc
+# search by title, subtitle, date, doc, industry
 def searchdtl(
     df,
     start_date,
@@ -160,8 +172,11 @@ def searchdtl(
     title_text,
     wenhao_text,
     event_text,
+    industry,
+    min_penalty,
+    law_select,
 ):
-    cols = ["标题", "文号", "发布日期", "内容", "id"]
+    cols = ["标题", "文号", "发布日期", "内容", "id", "label"]
     # split words
     title_text = split_words(title_text)
     wenhao_text = split_words(wenhao_text)
@@ -173,9 +188,14 @@ def searchdtl(
         & (df["标题"].str.contains(title_text))
         & (df["文号"].str.contains(wenhao_text))
         & (df["内容"].str.contains(event_text))
+        & (df["label"].isin(industry))
+        & (df["amount"] >= min_penalty)
+        & (df["法律法规"].isin(law_select))
     ][cols]
     # sort by date desc
     searchdf.sort_values(by=["发布日期"], ascending=False, inplace=True)
+    # drop duplicates by id
+    searchdf.drop_duplicates(subset=["id"], inplace=True)
     # reset index
     searchdf.reset_index(drop=True, inplace=True)
     return searchdf
@@ -296,10 +316,10 @@ def display_dfmonth(df):
         if i != 0:
             case_total = case_total + 1
 
-    for i in sum_data:
-        sum_data_number = sum_data_number + i / 10000
-        if i > 100 * 10000:
-            more_than_100 = more_than_100 + 1
+    # for i in sum_data:
+    #     sum_data_number = sum_data_number + i / 10000
+    #     if i > 100 * 10000:
+    #         more_than_100 = more_than_100 + 1
     # sum_data_number=round(sum_data_number,2)
     if case_total > 0:
         avg_sum = round(sum_data_number / case_total, 2)
@@ -346,27 +366,30 @@ def display_eventdetail(search_df):
         "下载搜索结果", data=search_dfnew.to_csv().encode("utf_8_sig"), file_name="搜索结果.csv"
     )
     # display columns
-    # discols = ["发布日期", "名称", "机构", "链接"]
-    # # get display df
-    # display_df = search_dfnew[discols]
+    discols = ["id", "标题", "文号", "发布日期", "label"]
+    # get display df
+    display_df = search_dfnew[discols]
+    # change column name
+    display_df.columns = ["id", "标题", "文号", "发布日期", "行业类型"]
 
     # st.table(search_df)
-    data = df2aggrid(search_dfnew)
+    data = df2aggrid(display_df)
     # display data
     selected_rows = data["selected_rows"]
     if selected_rows == []:
         st.error("请先选择查看案例")
         st.stop()
-    # convert selected_rows to dataframe
-    selected_rows_df = pd.DataFrame(selected_rows)
+
+    id = selected_rows[0]["id"]
+    # select search_dfnew by id
+    selected_rows_df = search_dfnew[search_dfnew["id"] == id]
     # transpose and set column name
     selected_rows_df = selected_rows_df.astype(str).T
-
+    # st.write(selected_rows_df)
     selected_rows_df.columns = ["内容"]
     # display selected rows
     st.table(selected_rows_df)
 
-    id = selected_rows[0]["id"]
     # get event detail url
     url = urldtl + str(id)
     # display url
@@ -383,6 +406,62 @@ def display_eventdetail(search_df):
         # display penalty amount
         amount = amtdata["amount"].values[0]
         st.metric("罚款金额", amount)
+
+    # get labeldf
+    labeldf = get_cbirclabel()
+    # search labels by url
+    labeldata = labeldf[labeldf["id"] == id]
+    # display labels if labeldata is not empty
+    if labeldata.empty:
+        st.error("没有找到相关标签")
+    else:
+        # display labels
+        labels = labeldata["labels"].values[0]
+        scorels = labeldata["scores"].values[0]
+        # convert scores to string
+        scorels2 = ["%.3f" % x for x in scorels]
+        scorestr = "/".join(scorels2)
+        # st.markdown(scorestr)
+        keywords = st_tags(
+            label="##### 案件类型", text=scorestr, value=labels, suggestions=labels
+        )
+
+    # get lawdetail
+    lawdf = get_lawcbirc()
+    # search lawdetail by selected_rows_id
+    selected_rows_lawdetail = lawdf[lawdf["id"] == id]
+
+    if len(selected_rows_lawdetail) > 0:
+
+        # display lawdetail
+        st.markdown("##### 处罚依据")
+        lawdata = selected_rows_lawdetail[["法律法规", "条文"]]
+        # display lawdata
+        lawdtl = df2aggrid(lawdata)
+    #     selected_law = lawdtl["selected_rows"]
+    #     if selected_law == []:
+    #         st.error("请先选择查看监管条文")
+    #     else:
+    #         # get selected_law's rule name
+    #         selected_law_name = selected_law[0]["法律法规"]
+    #         # get selected_law's rule article
+    #         selected_law_article = selected_law[0]["条文"]
+    #         # get law detail by name
+    #         ruledf = get_rulelist_byname(selected_law_name, "", "", "", "")
+    #         # get law ids
+    #         ids = ruledf["lawid"].tolist()
+    #         # get law detail by id
+    #         metadf, dtldf = get_lawdtlbyid(ids)
+    #         # display law meta
+    #         st.write("监管法规")
+    #         st.table(metadf)
+    #         # get law detail by article
+    #         articledf = dtldf[dtldf["标题"].str.contains(selected_law_article)]
+    #         # display law detail
+    #         st.write("监管条文")
+    #         st.table(articledf)
+    # else:
+    #     st.write("没有相关监管法规")
 
 
 # get sumeventdf in page number range
@@ -880,3 +959,20 @@ def print_line(x_data, y_data, y_axis_name, title):
     # use events
     clickevent = st_pyecharts(line, events=events, height=400)
     return line, clickevent
+
+
+def get_cbirclabel():
+    labeldf = get_csvdf(pencbirc, "cbirclabel")
+    # literal_eval apply to labels and scores
+    labeldf["labels"] = labeldf["labels"].apply(literal_eval)
+    labeldf["scores"] = labeldf["scores"].apply(literal_eval)
+    # fillna
+    labeldf = labeldf.fillna("")
+    return labeldf
+
+
+def get_lawcbirc():
+    lawdf = get_csvdf(pencbirc, "cbirclawdf")
+    # fillna
+    lawdf = lawdf.fillna("")
+    return lawdf

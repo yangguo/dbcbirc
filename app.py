@@ -6,11 +6,14 @@ from dbcbirc import (
     display_eventdetail,
     download_cbircsum,
     generate_lawdf,
+    get_cbircamt,
     get_cbircanalysis,
     get_cbircdetail,
+    get_cbirclabel,
     get_cbircsum,
     get_cbirctoupd,
     get_eventdetail,
+    get_lawcbirc,
     get_sumeventdf,
     searchcbirc,
     searchdtl,
@@ -143,10 +146,18 @@ def main():
             # get min and max date of old eventdf
             min_date = df["发布日期"].min()
             max_date = df["发布日期"].max()
-            # use metric
-            # st.sidebar.write("案例总数", oldlen)
-            # st.sidebar.write("最晚发文日期", max_date)
-            # st.sidebar.write("最早发文日期", min_date)
+            # get cbirclabel
+            labeldf = get_cbirclabel()
+            # get cbircamt
+            cbircamt = get_cbircamt()
+            # get lawcbirc
+            lawcbirc = get_lawcbirc()
+            # get lawlist
+            lawlist = lawcbirc["法律法规"].unique()
+            # merge cbircdetail, cbirclabel,cbircamt and lawcbirc by id
+            dfl = pd.merge(df, labeldf, on="id", how="left")
+            dfl = pd.merge(dfl, cbircamt, on="id", how="left")
+            dfl = pd.merge(dfl, lawcbirc, on="id", how="left")
             # one years ago
             one_year_ago = max_date - pd.Timedelta(days=365 * 1)
             # use form
@@ -164,15 +175,22 @@ def main():
                     people_text = st.text_input("当事人关键词")
                     # input event keyword
                     event_text = st.text_input("案情关键词")
+                    # choose industry category using multiselect in banking and insurance
+                    industry = st.multiselect("行业", ["银行", "保险"])
 
                 with col2:
                     end_date = st.date_input("结束日期", value=max_date, min_value=min_date)
                     # input law keyword
-                    law_text = st.text_input("处罚依据关键词")
+                    # law_text = st.text_input("处罚依据关键词")
+                    # choose law using multiselect
+                    law_text = st.multiselect("处罚依据", lawlist)
                     # input penalty keyword
                     penalty_text = st.text_input("处罚决定关键词")
                     # input org keyword
                     org_text = st.text_input("处罚机关关键词")
+                    # input minimum penalty amount
+                    min_penalty = st.number_input("最低处罚金额", value=0)
+
                 # search button
                 searchbutton = st.form_submit_button("搜索")
 
@@ -182,15 +200,19 @@ def main():
                     wenhao_text == ""
                     and people_text == ""
                     and event_text == ""
-                    and law_text == ""
+                    # and law_text == ""
                     and penalty_text == ""
                     and org_text == ""
                 ):
                     st.warning("请输入搜索关键词")
                     # st.stop()
+                if industry == []:
+                    industry = ["银行", "保险"]
+                if law_text == []:
+                    law_text = lawlist
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchcbirc(
-                    df,
+                    dfl,
                     start_date,
                     end_date,
                     wenhao_text,
@@ -199,6 +221,8 @@ def main():
                     law_text,
                     penalty_text,
                     org_text,
+                    industry,
+                    min_penalty,
                 )
                 # save search_df to session state
                 st.session_state["search_result_cbirc"] = search_df
@@ -213,10 +237,19 @@ def main():
             # get min and max date of old eventdf
             min_date = df["发布日期"].min()
             max_date = df["发布日期"].max()
-            # use metric
-            # st.sidebar.write("案例总数", oldlen)
-            # st.sidebar.write("最晚发文日期", max_date)
-            # st.sidebar.write("最早发文日期", min_date)
+            # get cbirclabel
+            cbirclabel = get_cbirclabel()
+            # get cbircamt
+            cbircamt = get_cbircamt()
+            # get lawcbirc
+            lawcbirc = get_lawcbirc()
+            # get lawlist
+            lawlist = lawcbirc["法律法规"].unique()
+            # merge cbircdetail, cbirclabel,cbircamt and lawcbirc by id
+            dfl = pd.merge(df, cbirclabel, on="id", how="left")
+            dfl = pd.merge(dfl, cbircamt, on="id", how="left")
+            dfl = pd.merge(dfl, lawcbirc, on="id", how="left")
+
             # one years ago
             one_year_ago = max_date - pd.Timedelta(days=365 * 1)
             with st.form("案情经过"):
@@ -231,11 +264,17 @@ def main():
                     title_text = st.text_input("标题")
                     # input event keyword
                     event_text = st.text_input("案情关键词")
+                    # input minimum penalty amount
+                    min_penalty = st.number_input("最低处罚金额", value=0)
 
                 with col2:
                     end_date = st.date_input("结束日期", value=max_date, min_value=min_date)
                     # input wenhao keyword
                     wenhao_text = st.text_input("文号")
+                    # choose industry category of banking or insurance
+                    industry = st.multiselect("行业", ["银行", "保险"])
+                    # choose reference law
+                    law_select = st.multiselect("处罚依据", lawlist)
                 # search button
                 searchbutton = st.form_submit_button("搜索")
 
@@ -244,14 +283,21 @@ def main():
                 if title_text == "" and event_text == "" and wenhao_text == "":
                     st.warning("请输入搜索关键词")
                     # st.stop()
+                if industry == []:
+                    industry = ["银行", "保险"]
+                if law_select == []:
+                    law_select = lawlist
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchdtl(
-                    df,
+                    dfl,
                     start_date,
                     end_date,
                     title_text,
                     wenhao_text,
                     event_text,
+                    industry,
+                    min_penalty,
+                    law_select,
                 )
                 # save search_df to session state
                 st.session_state["search_result_cbirc"] = search_df
