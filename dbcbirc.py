@@ -11,9 +11,11 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
 from pyecharts import options as opts
-from pyecharts.charts import Bar, Line
+from pyecharts.charts import Bar, Line, Map, Pie
+from streamlit_echarts import Map as st_Map
 from streamlit_echarts import st_pyecharts
 from streamlit_tags import st_tags
 
@@ -21,7 +23,7 @@ from utils import df2aggrid, split_words
 
 # import matplotlib
 
-
+mappath = "cbirc/map/chinageo.json"
 pencbirc = "cbirc"
 # mapfolder = '../temp/citygeo.csv'
 urldtl = "https://www.cbirc.gov.cn/cn/view/pages/ItemDetail.html?docId="
@@ -118,6 +120,7 @@ def searchcbirc(
     org_text,
     industry,
     min_penalty,
+    province,
 ):
     cols = [
         "标题",
@@ -154,6 +157,7 @@ def searchcbirc(
         & (df["label"].isin(industry))
         & (df["amount"] >= min_penalty)
         & (df["法律法规"].isin(law_text))
+        & (df["province"].isin(province))
     ][cols]
     # sort by date desc
     searchdf.sort_values(by=["发布日期"], ascending=False, inplace=True)
@@ -175,6 +179,7 @@ def searchdtl(
     industry,
     min_penalty,
     law_select,
+    province_select,
 ):
     cols = ["标题", "文号", "发布日期", "内容", "id", "label"]
     # split words
@@ -191,6 +196,7 @@ def searchdtl(
         & (df["label"].isin(industry))
         & (df["amount"] >= min_penalty)
         & (df["法律法规"].isin(law_select))
+        & (df["province"].isin(province_select))
     ][cols]
     # sort by date desc
     searchdf.sort_values(by=["发布日期"], ascending=False, inplace=True)
@@ -287,6 +293,46 @@ def display_dfmonth(df):
 
         # display total coun
         st.markdown("##### " + image1_text)
+
+    locdf = get_cbircloc()
+    # merge df_month with locdf by id
+    df_month_loc = pd.merge(df_month, locdf, on="id", how="left")
+    # count by province
+    df_org_count = df_month_loc.groupby(["province"]).size().reset_index(name="count")
+    org_ls = df_org_count["province"].tolist()
+    count_ls = df_org_count["count"].tolist()
+
+    pie, orgname = print_pie(org_ls, count_ls, "按发文机构统计")
+    # 图二解析开始
+    orgls = pd.value_counts(df_month_loc["province"]).keys().tolist()
+    countls = pd.value_counts(df_month_loc["province"]).tolist()
+    result = ""
+
+    for org, count in zip(orgls[:3], countls[:3]):
+        result = result + org + "（" + str(count) + "起）,"
+
+    image2_text = (
+        "图二解析："
+        + minmonth
+        + "至"
+        + maxmonth
+        + "，共"
+        + str(len(orgls))
+        + "家地区监管机构提出处罚意见，"
+        + "排名前三的机构为："
+        + result[: len(result) - 1]
+    )
+    st.markdown("#####  " + image2_text)
+
+    new_orgls, new_countls = count_by_province(org_ls, count_ls)
+    # st.write(new_orgls)
+    # st.write(new_countls)
+    showgraph3 = True
+    if showgraph3:
+        map = print_map(new_orgls, new_countls, "处罚地图", "处罚数量")
+        # st_pyecharts(map_data, map=map, width=800, height=650)
+        # display map
+        components.html(map.render_embed(), height=650)
 
     # get eventdf sum amount by month
     df_sum, df_sigle_penalty = sum_amount_by_month(df_month)
@@ -976,3 +1022,90 @@ def get_lawcbirc():
     # fillna
     lawdf = lawdf.fillna("")
     return lawdf
+
+
+def get_cbircloc():
+    locdf = get_csvdf(pencbirc, "cbircloc")
+    # fillna
+    locdf = locdf.fillna("")
+    return locdf
+
+
+# province_name为省份名称列表；province_values为各省份对应值；title_name为标题,dataname为值标签（如：处罚案例数量）
+def print_map(province_name, province_values, title_name, dataname):
+    with open(mappath, "r", encoding="utf-8-sig") as f:
+        map = st_Map(
+            "china",
+            json.loads(f.read()),
+        )
+
+    map_data = (
+        Map()
+        .add(
+            dataname,
+            [list(z) for z in zip(province_name, province_values)],
+            "china",
+            is_roam=False,
+            is_map_symbol_show=False,
+        )
+        .set_series_opts(label_opts=opts.LabelOpts(is_show=True))
+        .set_global_opts(
+            title_opts=opts.TitleOpts(title=title_name),
+            visualmap_opts=opts.VisualMapOpts(
+                max_=max(province_values)  # , range_color=["#F3F781", "#D04A02"]
+            ),
+        )
+    )
+    # st_pyecharts(map_data, map=map, height=700)  # ,width=800 )
+    return map_data
+
+
+# combine count by province
+def count_by_province(orgls, countls):
+    result = dict()
+    for org in orgls:
+        # replace orgname
+        new = (
+            org.replace("市", "")
+            .replace("省", "")
+            .replace("自治区", "")
+            .replace("回族", "")
+            .replace("壮族", "")
+            .replace("维吾尔", "")
+            .replace("特别行政区", "")
+        )
+        if org == "":
+            new = "北京"
+
+        result[new] = countls[orgls.index(org)]
+    new_orgls = result.keys()
+    new_countls = result.values()
+    return new_orgls, new_countls
+
+
+# print pie charts
+def print_pie(namels, valuels, title):
+    pie = (
+        Pie()
+        .add(
+            "",
+            [list(z) for z in zip(namels, valuels)],
+            radius=["30%", "60%"],
+            # center=["35%", "50%"]
+        )
+        # set legend position
+        .set_global_opts(
+            title_opts=opts.TitleOpts(title=title)
+            # set legend position to down
+            ,
+            legend_opts=opts.LegendOpts(pos_bottom="bottom"),
+            visualmap_opts=opts.VisualMapOpts(max_=max(valuels)),
+        )
+        .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {c}"))
+    )
+    events = {
+        "click": "function(params) { console.log(params.name); return params.name }",
+        # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
+    }
+    clickevent = st_pyecharts(pie, events=events, height=650)  # width=800)
+    return pie, clickevent

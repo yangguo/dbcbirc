@@ -10,6 +10,7 @@ from dbcbirc import (
     get_cbircanalysis,
     get_cbircdetail,
     get_cbirclabel,
+    get_cbircloc,
     get_cbircsum,
     get_cbirctoupd,
     get_eventdetail,
@@ -154,10 +155,15 @@ def main():
             lawcbirc = get_lawcbirc()
             # get lawlist
             lawlist = lawcbirc["法律法规"].unique()
+            # get cbircloc
+            cbircloc = get_cbircloc()
+            # get province list
+            provlist = cbircloc["province"].unique()
             # merge cbircdetail, cbirclabel,cbircamt and lawcbirc by id
             dfl = pd.merge(df, labeldf, on="id", how="left")
             dfl = pd.merge(dfl, cbircamt, on="id", how="left")
             dfl = pd.merge(dfl, lawcbirc, on="id", how="left")
+            dfl = pd.merge(dfl, cbircloc, on="id", how="left")
             # one years ago
             one_year_ago = max_date - pd.Timedelta(days=365 * 1)
             # use form
@@ -177,6 +183,8 @@ def main():
                     event_text = st.text_input("案情关键词")
                     # choose industry category using multiselect in banking and insurance
                     industry = st.multiselect("行业", ["银行", "保险"])
+                    # choose province using multiselect
+                    province = st.multiselect("处罚省份", provlist)
 
                 with col2:
                     end_date = st.date_input("结束日期", value=max_date, min_value=min_date)
@@ -210,6 +218,8 @@ def main():
                     industry = ["银行", "保险"]
                 if law_text == []:
                     law_text = lawlist
+                if province == []:
+                    province = provlist
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchcbirc(
                     dfl,
@@ -223,6 +233,7 @@ def main():
                     org_text,
                     industry,
                     min_penalty,
+                    province,
                 )
                 # save search_df to session state
                 st.session_state["search_result_cbirc"] = search_df
@@ -245,10 +256,15 @@ def main():
             lawcbirc = get_lawcbirc()
             # get lawlist
             lawlist = lawcbirc["法律法规"].unique()
+            # get cbircloc
+            cbircloc = get_cbircloc()
+            # get province list
+            provlist = cbircloc["province"].unique()
             # merge cbircdetail, cbirclabel,cbircamt and lawcbirc by id
             dfl = pd.merge(df, cbirclabel, on="id", how="left")
             dfl = pd.merge(dfl, cbircamt, on="id", how="left")
             dfl = pd.merge(dfl, lawcbirc, on="id", how="left")
+            dfl = pd.merge(dfl, cbircloc, on="id", how="left")
 
             # one years ago
             one_year_ago = max_date - pd.Timedelta(days=365 * 1)
@@ -266,7 +282,8 @@ def main():
                     event_text = st.text_input("案情关键词")
                     # input minimum penalty amount
                     min_penalty = st.number_input("最低处罚金额", value=0)
-
+                    # choose province using multiselect
+                    province = st.multiselect("处罚省份", provlist)
                 with col2:
                     end_date = st.date_input("结束日期", value=max_date, min_value=min_date)
                     # input wenhao keyword
@@ -287,6 +304,8 @@ def main():
                     industry = ["银行", "保险"]
                 if law_select == []:
                     law_select = lawlist
+                if province == []:
+                    province = provlist
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchdtl(
                     dfl,
@@ -298,6 +317,7 @@ def main():
                     industry,
                     min_penalty,
                     law_select,
+                    province,
                 )
                 # save search_df to session state
                 st.session_state["search_result_cbirc"] = search_df
