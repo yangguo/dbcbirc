@@ -19,8 +19,10 @@ from dbcbirc import (
     searchcbirc,
     searchdtl,
     update_cbircanalysis,
+    update_cbirclabel,
     update_sumeventdf,
     update_toupd,
+    
 )
 
 
@@ -30,6 +32,7 @@ def main():
         "案例总数",
         "案例搜索",
         "案例更新",
+        "案例分类",
     ]
     org_namels = ["银保监会机关", "银保监局本级", "银保监分局本级"]
     choice = st.sidebar.selectbox("选择", menu)
@@ -333,6 +336,12 @@ def main():
             display_eventdetail(search_df)
         else:
             st.warning("没有搜索结果")
+
+    elif choice == "案例分类":
+        # button for generate label text
+        labeltext_button = st.button("生成待更新案例")
+        if labeltext_button:
+            update_cbirclabel()
 
 
 if __name__ == "__main__":

@@ -142,3 +142,4 @@ dmypy.json
 .markdownlint.yaml
 .trunk
 *.zip
+/cbirc

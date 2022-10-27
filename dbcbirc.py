@@ -15,7 +15,7 @@ import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
 from pyecharts import options as opts
 from pyecharts.charts import Bar, Line, Map, Pie
-from streamlit_echarts import Map as st_Map
+# from streamlit_echarts import Map as st_Map
 from streamlit_echarts import st_pyecharts
 from streamlit_tags import st_tags
 
@@ -23,7 +23,7 @@ from utils import df2aggrid, split_words
 
 # import matplotlib
 
-mappath = "cbirc/map/chinageo.json"
+# mappath = "cbirc/map/chinageo.json"
 pencbirc = "cbirc"
 # mapfolder = '../temp/citygeo.csv'
 urldtl = "https://www.cbirc.gov.cn/cn/view/pages/ItemDetail.html?docId="
@@ -1033,11 +1033,11 @@ def get_cbircloc():
 
 # province_name为省份名称列表；province_values为各省份对应值；title_name为标题,dataname为值标签（如：处罚案例数量）
 def print_map(province_name, province_values, title_name, dataname):
-    with open(mappath, "r", encoding="utf-8-sig") as f:
-        map = st_Map(
-            "china",
-            json.loads(f.read()),
-        )
+    # with open(mappath, "r", encoding="utf-8-sig") as f:
+    #     map = st_Map(
+    #         "china",
+    #         json.loads(f.read()),
+    #     )
 
     map_data = (
         Map()
@@ -1109,3 +1109,76 @@ def print_pie(namels, valuels, title):
     }
     clickevent = st_pyecharts(pie, events=events, height=650)  # width=800)
     return pie, clickevent
+
+
+def update_cbirclabel():
+    # get cbirc detail
+    newdf = get_cbircdetail("")
+    # get id list
+    newidls = newdf["id"].tolist()
+    # get cbirc analysis
+    anadf = get_cbircanalysis("")
+    # get id list
+    anaidls = anadf["id"].tolist()
+    # get amount details
+    amtdf = get_cbircamt()
+    # get labeldf
+    labeldf = get_cbirclabel()
+    # get locdf
+    locdf = get_cbircloc()
+    # if amtdf is not empty
+    if amtdf.empty:
+        amtoldidls = []
+    else:
+        amtoldidls = amtdf["id"].tolist()
+    # get new idls not in oldidls
+    amtupdidls = [x for x in newidls if x not in amtoldidls]
+
+    # if labeldf is not empty
+    if labeldf.empty:
+        labeloldidls = []
+    else:
+        labeloldidls = labeldf["id"].tolist()
+    # get new idls not in oldidls
+    labelupdidls = [x for x in anaidls if x not in labeloldidls]
+
+    # if locdf is not empty
+    if locdf.empty:
+        locoldidls = []
+    else:
+        locoldidls = locdf["id"].tolist()
+    # get new idls not in oldidls
+    locupdidls = [x for x in newidls if x not in locoldidls]
+
+    amtupddf = newdf[newdf["id"].isin(amtupdidls)]
+    # if newdf is not empty, save it
+    if amtupddf.empty is False:
+        updlen = len(amtupddf)
+        st.info("待更新处罚金额" + str(updlen) + "条数据")
+        savename = "cbirc_toamt" + get_nowdate() + ".csv"
+        # download detail data
+        st.download_button(
+            "下载案例数据", data=amtupddf.to_csv().encode("utf_8_sig"), file_name=savename
+        )
+
+    labelupddf = anadf[anadf["id"].isin(labelupdidls)]
+    # if newdf is not empty, save it
+    if labelupddf.empty is False:
+        updlen = len(labelupddf)
+        st.info("待更新标签" + str(updlen) + "条数据")
+        savename = "cbirc_tolabel" + get_nowdate() + ".csv"
+        # download detail data
+        st.download_button(
+            "下载案例数据", data=labelupddf.to_csv().encode("utf_8_sig"), file_name=savename
+        )
+
+    locupddf = newdf[newdf["id"].isin(locupdidls)]
+    # if newdf is not empty, save it
+    if locupddf.empty is False:
+        updlen = len(locupddf)
+        st.info("待更新地区" + str(updlen) + "条数据")
+        savename = "cbirc_toloc" + get_nowdate() + ".csv"
+        # download detail data
+        st.download_button(
+            "下载案例数据", data=locupddf.to_csv().encode("utf_8_sig"), file_name=savename
+        )
