@@ -15,6 +15,7 @@ import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
 from pyecharts import options as opts
 from pyecharts.charts import Bar, Line, Map, Pie
+
 # from streamlit_echarts import Map as st_Map
 from streamlit_echarts import st_pyecharts
 from streamlit_tags import st_tags
@@ -742,10 +743,11 @@ def update_cbircanalysis(orgname):
         updlen = len(splitdf)
         st.info("拆分了" + str(updlen) + "条数据")
         # combine with olddf
-        upddf1 = pd.concat([splitdf, olddf])
+        # upddf1 = pd.concat([splitdf, olddf])
+        upddf1 = splitdf
         # # reset index
         upddf1.reset_index(drop=True, inplace=True)
-        savename = "cbircanalysis" + org_name_index
+        savename = "cbircanalysis" + org_name_index + get_now()
         savedf(upddf1, savename)
 
 
@@ -948,6 +950,9 @@ def download_cbircsum(orgname):
 
     beginwith = "cbircdtl" + org_name_index
     dtl = get_csvdf(pencbirc, beginwith)
+    # get analysis data
+    beginwith = "cbircanalysis" + org_name_index
+    analysis = get_csvdf(pencbirc, beginwith)
 
     # listname
     listname = "cbircsum" + org_name_index + get_nowdate() + ".csv"
@@ -960,6 +965,12 @@ def download_cbircsum(orgname):
     # download detail data
     st.download_button(
         "下载详情数据", data=dtl.to_csv().encode("utf_8_sig"), file_name=detailname
+    )
+    # analysisname
+    analysisname = "cbircanalysis" + org_name_index + get_nowdate() + ".csv"
+    # download analysis data
+    st.download_button(
+        "下载拆分数据", data=analysis.to_csv().encode("utf_8_sig"), file_name=analysisname
     )
 
 
@@ -1161,7 +1172,7 @@ def update_cbirclabel():
             "下载案例数据", data=amtupddf.to_csv().encode("utf_8_sig"), file_name=savename
         )
 
-    labelupddf = anadf[anadf["id"].isin(labelupdidls)]
+    labelupddf = newdf[newdf["id"].isin(labelupdidls)]
     # if newdf is not empty, save it
     if labelupddf.empty is False:
         updlen = len(labelupddf)
@@ -1172,7 +1183,7 @@ def update_cbirclabel():
             "下载案例数据", data=labelupddf.to_csv().encode("utf_8_sig"), file_name=savename
         )
 
-    locupddf = newdf[newdf["id"].isin(locupdidls)]
+    locupddf = anadf[anadf["id"].isin(locupdidls)]
     # if newdf is not empty, save it
     if locupddf.empty is False:
         updlen = len(locupddf)
