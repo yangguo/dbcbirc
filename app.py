@@ -28,6 +28,14 @@ from dbcbirc import (
     update_toupd,
 )
 
+# set page config
+st.set_page_config(
+    page_title="中国银监会监管处罚分析",
+    page_icon=":bank:",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 backendurl = "http://localhost:8000"
 
 
@@ -95,23 +103,26 @@ def main():
         # update detail button
         eventdetailbutton = st.sidebar.button("更新详情")
         if eventdetailbutton:
-            # update sumeventdf
-            newsum = update_toupd(org_name)
-            # get length of toupd
-            newsum_len = len(newsum)
-            # display sumeventdf
-            st.success(f"共{newsum_len}条案例待更新")
-            if newsum_len > 0:
-                # get toupdate list
-                toupd = get_cbirctoupd(org_name)
-                # get event detail
-                eventdetail = get_eventdetail(toupd, org_name)
-                # get length of eventdetail
-                eventdetail_len = len(eventdetail)
-                # display eventdetail
-                st.success(f"更新完成，共{eventdetail_len}条案例详情")
-            else:
-                st.error("没有更新的案例")
+            for org_name in org_namels:
+                # write org_name
+                st.markdown("#### 更新详情：" + org_name)
+                # update sumeventdf
+                newsum = update_toupd(org_name)
+                # get length of toupd
+                newsum_len = len(newsum)
+                # display sumeventdf
+                st.success(f"共{newsum_len}条案例待更新")
+                if newsum_len > 0:
+                    # get toupdate list
+                    toupd = get_cbirctoupd(org_name)
+                    # get event detail
+                    eventdetail = get_eventdetail(toupd, org_name)
+                    # get length of eventdetail
+                    eventdetail_len = len(eventdetail)
+                    # display eventdetail
+                    st.success(f"更新完成，共{eventdetail_len}条案例详情")
+                else:
+                    st.error("没有更新的案例")
 
         # button to refresh page
         refreshbutton = st.sidebar.button("刷新页面")
@@ -138,6 +149,8 @@ def main():
         # initialize search result in session state
         if "search_result_cbirc" not in st.session_state:
             st.session_state["search_result_cbirc"] = None
+        if "keywords_cbirc" not in st.session_state:  # 生成word的session初始化
+            st.session_state["keywords_cbirc"] = []
         # choose search type using radio
         search_type = st.sidebar.radio(
             "搜索类型",
@@ -228,6 +241,20 @@ def main():
                     law_text = lawlist
                 if province == []:
                     province = provlist
+
+                st.session_state["keywords_cbirc"] = [
+                    start_date,
+                    end_date,
+                    wenhao_text,
+                    people_text,
+                    event_text,
+                    law_text,
+                    penalty_text,
+                    org_text,
+                    industry,
+                    min_penalty,
+                    province,
+                ]
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchcbirc(
                     dfl,
@@ -314,6 +341,17 @@ def main():
                     law_select = lawlist
                 if province == []:
                     province = provlist
+                st.session_state["keywords_cbirc"] = [
+                       start_date,
+                    end_date,
+                    title_text,
+                    wenhao_text,
+                    event_text,
+                    industry,
+                    min_penalty,
+                    law_select,
+                    province,
+                ]
                 # search by start_date, end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
                 search_df = searchdtl(
                     dfl,
@@ -344,7 +382,7 @@ def main():
 
     elif choice == "案例分类":
         options = st.sidebar.radio(
-            "选项", ["生成待标签案例", "处罚金额分析", "案例分类", "案例批量分类", "监管地区分析", "当事人分析"]
+            "选项", ["生成待标签案例", "处罚金额分析", "案例批量分类", "监管地区分析", "当事人分析", "文本分类", "信息抽取"]
         )
 
         if options == "生成待标签案例":
@@ -413,7 +451,7 @@ def main():
                         st.error(e)
                         st.error("处罚金额分析失败")
 
-        elif options == "案例分类":
+        elif options == "文本分类":
             # text are for text
             article_text = st.text_area("输入文本", value="")
             # text area for input label list
@@ -641,6 +679,32 @@ def main():
                     except Exception as e:
                         st.error(e)
                         st.error("当事人分析失败")
+
+        elif options == "信息抽取":
+            # text are for text
+            article_text = st.text_area("输入文本", value="")
+            # input topic
+            topic = st.text_input("输入主题", value="")
+
+            # button for information extraction
+            extract_button = st.button("信息抽取")
+            if extract_button:
+                if article_text == "" or topic == "":
+                    st.error("输入文本及主题")
+                else:
+                    try:
+                        url = backendurl + "/infoextract"
+                        payload = {
+                            "article": article_text,
+                            "topic": topic,
+                        }
+                        headers = {}
+                        res = requests.post(url, headers=headers, params=payload)
+                        st.success("信息抽取完成")
+                        st.write(res.json())
+                    except Exception as e:
+                        st.error("信息抽取失败")
+                        st.write(e)
 
 
 if __name__ == "__main__":

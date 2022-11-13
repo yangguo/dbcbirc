@@ -1,5 +1,6 @@
 import datetime
 import glob
+import io
 import json
 import os
 import random
@@ -7,20 +8,29 @@ import re
 import time
 from ast import literal_eval
 
+import docx
 import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
+from docx.shared import Pt
 from pyecharts import options as opts
 from pyecharts.charts import Bar, Line, Map, Pie
+from pyecharts.render import make_snapshot
 
 # from streamlit_echarts import Map as st_Map
 from streamlit_echarts import st_pyecharts
-from streamlit_tags import st_tags
 
+import snapshot as driver
 from utils import df2aggrid, split_words
+
+# from streamlit_tags import st_tags
+
 
 # import matplotlib
 
@@ -246,7 +256,7 @@ def display_dfmonth(df):
         # }
         # use events
         # yearmonth = st_pyecharts(bar, events=events)
-        yearmonth = print_bar(x_data, y_data, "处罚数量", "按发文时间统计")
+        bar, yearmonth = print_bar(x_data, y_data, "处罚数量", "按发文时间统计")
         # st.write(yearmonth)
         if yearmonth is not None:
             # get year and month value from format "%Y-%m"
@@ -295,46 +305,6 @@ def display_dfmonth(df):
         # display total coun
         st.markdown("##### " + image1_text)
 
-    locdf = get_cbircloc()
-    # merge df_month with locdf by id
-    df_month_loc = pd.merge(df_month, locdf, on="id", how="left")
-    # count by province
-    df_org_count = df_month_loc.groupby(["province"]).size().reset_index(name="count")
-    org_ls = df_org_count["province"].tolist()
-    count_ls = df_org_count["count"].tolist()
-
-    pie, orgname = print_pie(org_ls, count_ls, "按发文机构统计")
-    # 图二解析开始
-    orgls = pd.value_counts(df_month_loc["province"]).keys().tolist()
-    countls = pd.value_counts(df_month_loc["province"]).tolist()
-    result = ""
-
-    for org, count in zip(orgls[:3], countls[:3]):
-        result = result + org + "（" + str(count) + "起）,"
-
-    image2_text = (
-        "图二解析："
-        + minmonth
-        + "至"
-        + maxmonth
-        + "，共"
-        + str(len(orgls))
-        + "家地区监管机构提出处罚意见，"
-        + "排名前三的机构为："
-        + result[: len(result) - 1]
-    )
-    st.markdown("#####  " + image2_text)
-
-    new_orgls, new_countls = count_by_province(org_ls, count_ls)
-    # st.write(new_orgls)
-    # st.write(new_countls)
-    showgraph3 = True
-    if showgraph3:
-        map = print_map(new_orgls, new_countls, "处罚地图", "处罚数量")
-        # st_pyecharts(map_data, map=map, width=800, height=650)
-        # display map
-        components.html(map.render_embed(), height=650)
-
     # get eventdf sum amount by month
     df_sum, df_sigle_penalty = sum_amount_by_month(df_month)
 
@@ -351,7 +321,7 @@ def display_dfmonth(df):
         # refresh page
         # st.experimental_rerun()
 
-    # 图四解析：
+    # 图二解析：
     sum_data_number = 0  # 把案件金额的数组进行求和
     more_than_100 = 0  # 把案件金额大于100的数量进行统计
     case_total = 0  # 把案件的总数量进行统计
@@ -377,8 +347,8 @@ def display_dfmonth(df):
     topsum1_index = df_sum["sum"].idxmax()
     # get month value of max count
     topsum1month = df_sum.loc[topsum1_index, "month"]
-    image4_text = (
-        "图四解析：从"
+    image2_text = (
+        "图二解析：从"
         + minmonth
         + "至"
         + maxmonth
@@ -396,7 +366,149 @@ def display_dfmonth(df):
         + str(round(topsum1.values[0] / 10000, 2))
         + "万元。"
     )
-    st.markdown("##### " + image4_text)
+    st.markdown("##### " + image2_text)
+
+    locdf = get_cbircloc()
+    # merge df_month with locdf by id
+    df_month_loc = pd.merge(df_month, locdf, on="id", how="left")
+    # count by province
+    df_org_count = df_month_loc.groupby(["province"]).size().reset_index(name="count")
+    org_ls = df_org_count["province"].tolist()
+    count_ls = df_org_count["count"].tolist()
+
+    new_orgls, new_countls = count_by_province(org_ls, count_ls)
+    map = print_map(new_orgls, new_countls, "处罚地图", "处罚数量")
+    # st_pyecharts(map_data, map=map, width=800, height=650)
+    # display map
+    components.html(map.render_embed(), height=650)
+    image3_text = "图三解析：处罚地图"
+
+    pie, orgname = print_pie(org_ls, count_ls, "按发文机构统计")
+
+    # 图四解析开始
+    orgls = pd.value_counts(df_month_loc["province"]).keys().tolist()
+    countls = pd.value_counts(df_month_loc["province"]).tolist()
+    result = ""
+
+    for org, count in zip(orgls[:3], countls[:3]):
+        result = result + org + "（" + str(count) + "起）,"
+
+    image4_text = (
+        "图四解析："
+        + minmonth
+        + "至"
+        + maxmonth
+        + "，共"
+        + str(len(orgls))
+        + "家地区监管机构提出处罚意见，"
+        + "排名前三的机构为："
+        + result[: len(result) - 1]
+    )
+    st.markdown("#####  " + image4_text)
+
+    # 图五解析：
+    # get id list from searchdf
+    idlist = df_month["id"].tolist()
+    # get lawdetail
+    lawdf = get_lawcbirc()
+    # search lawdetail by selected_rows_id
+    selected_lawdetail = lawdf[lawdf["id"].isin(idlist)]
+
+    # law type count
+    lawtype = (
+        selected_lawdetail.groupby("法律法规")["id"].nunique().reset_index(name="数量统计")
+    )
+    # sort by count
+    lawtype = lawtype.sort_values(by="数量统计", ascending=False)
+    x_data3 = lawtype["法律法规"].tolist()
+    y_data3 = lawtype["数量统计"].tolist()
+    bar3, lawtype_selected = print_bar(x_data3[:20], y_data3[:20], "处罚数量", "前20法律法规统计")
+
+    # 图五解析开始
+    lawtype_count = lawtype[["法律法规", "数量统计"]]  # 把法律法规的数量进行统计
+    # pandas数据排序
+    lawtype_count = lawtype_count.sort_values("数量统计", ascending=False)
+    result5a = ""
+    for i in range(5):
+        try:
+            result5a = (
+                result5a
+                + str(lawtype_count.iloc[i, 0])
+                + "("
+                + str(lawtype_count.iloc[i, 1])
+                + "起),"
+            )
+        except Exception as e:
+            print(e)
+            break
+    # st.markdown(
+    #     "##### 图五解析:法律法规统计-不同法规维度：处罚事件中，各违规类型中处罚数量排名前五分别为:"
+    #     + result5[: len(result5) - 1]
+    # )
+    # by具体条文
+    # lawdf["数量统计"] = ""
+    new_lawtype = (
+        selected_lawdetail.groupby(["法律法规", "条文"])["id"]
+        .nunique()
+        .reset_index(name="数量统计")
+    )
+    # new_lawtype=lawdf.groupby(['法律法规','条文'])#%%%
+    new_lawtype["法律法规明细"] = new_lawtype["法律法规"] + "(" + new_lawtype["条文"] + ")"
+
+    lawtype_count = new_lawtype[["法律法规明细", "数量统计"]]  # 把法律法规的数量进行统计
+    # pandas数据排序
+    lawtype_count = lawtype_count.sort_values("数量统计", ascending=False)
+    result5b = ""
+    for i in range(5):
+        try:
+            result5b = (
+                result5b
+                + str(lawtype_count.iloc[i, 0])
+                + "("
+                + str(lawtype_count.iloc[i, 1])
+                + "起),"
+            )
+        except Exception as e:
+            print(e)
+            break
+    image5_text = (
+        " 图五解析:法律法规统计-不同法规维度：处罚事件中，各违规类型中处罚数量排名前五分别为:"
+        + result5a[: len(result5a) - 1]
+        + "\n"
+        + "法律法规统计-具体条文维度：处罚事件中，各违规类型中处罚数量排名前五分别为:"
+        + result5b[: len(result5b) - 1]
+    )
+    st.markdown("##### " + image5_text)
+
+    # display summary
+    st.markdown("### 分析报告下载")
+
+    if st.button("生成分析报告"):
+        t1 = time.localtime()
+        t1 = time.strftime("%Y-%m-%d %H%M%S", t1)
+
+        image1 = bar.render(path=os.path.join(pencbirc, t1 + "image1.html"))
+        image2 = line.render(path=os.path.join(pencbirc, t1 + t1 + "image2.html"))
+        image3 = map.render(path=os.path.join(pencbirc, t1 + t1 + "image3.html"))
+        image4 = pie.render(path=os.path.join(pencbirc, t1 + t1 + "image4.html"))
+        image5 = bar3.render(path=os.path.join(pencbirc, t1 + t1 + "image5.html"))
+        # 做title
+        title = st.session_state["keywords_cbirc"]
+        title_str = ""
+        title_str = "(分析范围：期间:" + str(title[0]) + "至" + str(title[1]) + ","
+        if len(str(title[2])) != 0:
+            title_str = title_str + "文号为:" + str(title[2]) + "，"
+        if len(title[7]) != 0:
+            title_str = title_str + "发文单位为:" + title[3] + "，"
+        title_str = title_str[: len(title_str) - 1] + ")"
+        title_str = "银保监处罚事件分析报告\n" + title_str
+
+        file_name = make_docx(
+            title_str,
+            [image1_text, image2_text, image3_text, image4_text, image5_text],
+            [image1, image2, image3, image4, image5],
+        )
+        st.download_button("下载分析报告", data=file_name.read(), file_name="分析报告.docx")
 
 
 # display event detail
@@ -454,24 +566,42 @@ def display_eventdetail(search_df):
         amount = amtdata["amount"].values[0]
         st.metric("罚款金额", amount)
 
-    # get labeldf
-    labeldf = get_cbirclabel()
-    # search labels by url
-    labeldata = labeldf[labeldf["id"] == id]
-    # display labels if labeldata is not empty
-    if labeldata.empty:
-        st.error("没有找到相关标签")
+    # get litigantdf
+    litigantdf = get_cbirclitigant()
+    # search litigant by id
+    litigantdata = litigantdf[litigantdf["id"] == id]
+    # display litigant if litigantdata is not empty
+    if litigantdata.empty:
+        st.error("没有找到相关当事人信息")
     else:
-        # display labels
-        labels = labeldata["labels"].values[0]
-        scorels = labeldata["scores"].values[0]
-        # convert scores to string
-        scorels2 = ["%.3f" % x for x in scorels]
-        scorestr = "/".join(scorels2)
-        # st.markdown(scorestr)
-        keywords = st_tags(
-            label="##### 案件类型", text=scorestr, value=labels, suggestions=labels
-        )
+        # display litigant
+        peoplels = litigantdata["peoplels"].values[0]
+        orgls = litigantdata["orgls"].values[0]
+        # convert list to string
+        peoplestr = " ".join(peoplels)
+        orgstr = " ".join(orgls)
+        st.markdown("##### 当事人")
+        st.markdown("个人 :" + peoplestr)
+        st.markdown("机构 :" + orgstr)
+
+    # # get labeldf
+    # labeldf = get_cbirclabel()
+    # # search labels by url
+    # labeldata = labeldf[labeldf["id"] == id]
+    # # display labels if labeldata is not empty
+    # if labeldata.empty:
+    #     st.error("没有找到相关标签")
+    # else:
+    #     # display labels
+    #     labels = labeldata["labels"].values[0]
+    #     scorels = labeldata["scores"].values[0]
+    #     # convert scores to string
+    #     scorels2 = ["%.3f" % x for x in scorels]
+    #     scorestr = "/".join(scorels2)
+    #     # st.markdown(scorestr)
+    #     keywords = st_tags(
+    #         label="##### 案件类型", text=scorestr, value=labels, suggestions=labels
+    #     )
 
     # get lawdetail
     lawdf = get_lawcbirc()
@@ -716,7 +846,7 @@ def print_bar(x_data, y_data, y_axis_name, title):
     }
     # use events
     clickevent = st_pyecharts(bar, events=events, height=400)
-    return clickevent
+    return bar, clickevent
 
 
 # update the analysis data
@@ -931,7 +1061,7 @@ def lawls2dict(ls):
             lawdict = dict()
             lawls = re.findall(r"《(.*?)》", item)
             #         print(lawls)
-            artls = re.findall(r"(第[^《》、和章节款（）]*?条)", item)
+            artls = re.findall(r"(第[^《》、和章节款（）\(\)]*?条)", item)
             #         print(artls)
             lawdict["法律法规"] = lawls[0]
             lawdict["条文"] = artls
@@ -1137,6 +1267,9 @@ def update_cbirclabel():
     labeldf = get_cbirclabel()
     # get locdf
     locdf = get_cbircloc()
+    # get litigantdf
+    litigantdf = get_cbirclitigant()
+
     # if amtdf is not empty
     if amtdf.empty:
         amtoldidls = []
@@ -1159,7 +1292,15 @@ def update_cbirclabel():
     else:
         locoldidls = locdf["id"].tolist()
     # get new idls not in oldidls
-    locupdidls = [x for x in newidls if x not in locoldidls]
+    locupdidls = [x for x in anaidls if x not in locoldidls]
+
+    # if litigantdf is not empty
+    if litigantdf.empty:
+        litigantoldidls = []
+    else:
+        litigantoldidls = litigantdf["id"].tolist()
+    # get new idls not in oldidls
+    litigantupdidls = [x for x in anaidls if x not in litigantoldidls]
 
     amtupddf = newdf[newdf["id"].isin(amtupdidls)]
     # if newdf is not empty, save it
@@ -1172,7 +1313,7 @@ def update_cbirclabel():
             "下载案例数据", data=amtupddf.to_csv().encode("utf_8_sig"), file_name=savename
         )
 
-    labelupddf = newdf[newdf["id"].isin(labelupdidls)]
+    labelupddf = anadf[anadf["id"].isin(labelupdidls)]
     # if newdf is not empty, save it
     if labelupddf.empty is False:
         updlen = len(labelupddf)
@@ -1193,3 +1334,63 @@ def update_cbirclabel():
         st.download_button(
             "下载案例数据", data=locupddf.to_csv().encode("utf_8_sig"), file_name=savename
         )
+
+    litigantupddf = anadf[anadf["id"].isin(litigantupdidls)]
+    # if newdf is not empty, save it
+    if litigantupddf.empty is False:
+        updlen = len(litigantupddf)
+        st.info("待更新当事人" + str(updlen) + "条数据")
+        savename = "cbirc_tolitigant" + get_nowdate() + ".csv"
+        # download detail data
+        st.download_button(
+            "下载案例数据",
+            data=litigantupddf.to_csv().encode("utf_8_sig"),
+            file_name=savename,
+        )
+
+
+def get_cbirclitigant():
+    df = get_csvdf(pencbirc, "cbirclitigant")
+    df["peoplels"] = df["peoplels"].apply(literal_eval)
+    df["orgls"] = df["orgls"].apply(literal_eval)
+    # fillna
+    df = df.fillna("")
+    return df
+
+
+def make_docx(title, text, image):  # 制作docx的函数，title以str形式传入，其他以list的形式传入，输出为字符串的形式
+    document = Document()
+
+    # st.write(title_str)
+    # add title
+    document.add_paragraph().add_run(title).bold = True
+    # document.add_paragraph(title)
+    document.styles["Normal"].font.size = Pt(12)
+    document.styles["Normal"].font.name = "Times New Roman"  # 设置西文字体
+    document.styles["Normal"]._element.rPr.rFonts.set(
+        qn("w:eastAsia"), "FangSong"
+    )  # 设置中文字体使用字
+    # document.styles['Normal'].font.bold = True
+    # 加粗字体
+
+    for i, j in zip(text, image):  # [image1_text,image2_text],[image1,image2]
+        # document.styles['Normal'].font.bold = False
+        t = time.localtime()
+        t = time.strftime("%Y-%m-%d %H%M%S", t)
+        make_snapshot(driver, j, t + ".png", is_remove_html=True)  #
+        document.add_paragraph(i)
+        document.styles["Normal"].font.size = Pt(12)
+        document.styles["Normal"].font.name = "Times New Roman"  # 设置西文字体
+        document.styles["Normal"]._element.rPr.rFonts.set(
+            qn("w:eastAsia"), "FangSong"
+        )  # 设置中文字体使用字体2->宋体
+        document.add_picture(t + ".png", width=docx.shared.Inches(5.4))  # 6英尺是最大宽度
+        # print('当前图像高度', str(document.inline_shapes[0].height)+'当前图像宽度'+str(document.inline_shapes[0].width)) # 打印当前图片大小
+        last_paragraph = document.paragraphs[-1]
+        last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        os.remove(t + ".png")
+    file_stream = io.BytesIO()
+    document.save(file_stream)
+    file_stream.seek(0)
+    # document.save(t1+'.docx')
+    return file_stream
