@@ -45,6 +45,7 @@ def main():
         "案例总数",
         "案例搜索",
         "案例更新",
+        "案例下载",
         "案例分类",
     ]
     org_namels = ["银保监会机关", "银保监局本级", "银保监分局本级"]
@@ -72,7 +73,6 @@ def main():
             st.markdown("详情")
             dtl = get_cbircdetail(org_name)
             display_cbircsum(dtl)
-            download_cbircsum(org_name)
 
         # choose orgname index
         org_name = st.sidebar.selectbox("机构", ["银保监会机关", "银保监局本级", "银保监分局本级"])
@@ -342,7 +342,7 @@ def main():
                 if province == []:
                     province = provlist
                 st.session_state["keywords_cbirc"] = [
-                       start_date,
+                    start_date,
                     end_date,
                     title_text,
                     wenhao_text,
@@ -705,6 +705,10 @@ def main():
                     except Exception as e:
                         st.error("信息抽取失败")
                         st.write(e)
+    
+    elif choice == "案例下载":
+        
+        download_cbircsum(org_namels)
 
 
 if __name__ == "__main__":

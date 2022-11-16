@@ -1072,35 +1072,82 @@ def lawls2dict(ls):
         return np.nan
 
 
-def download_cbircsum(orgname):
-    # get orgname
-    org_name_index = org2name[orgname]
-    beginwith = "cbircsum" + org_name_index
-    oldsum = get_csvdf(pencbirc, beginwith)
+def download_cbircsum(org_namels):
 
-    beginwith = "cbircdtl" + org_name_index
-    dtl = get_csvdf(pencbirc, beginwith)
-    # get analysis data
-    beginwith = "cbircanalysis" + org_name_index
-    analysis = get_csvdf(pencbirc, beginwith)
+    st.markdown("#### 案例数据下载")
 
-    # listname
-    listname = "cbircsum" + org_name_index + get_nowdate() + ".csv"
-    # download list data
+    for orgname in org_namels:
+
+        st.markdown("##### " + orgname)
+        # get orgname
+        org_name_index = org2name[orgname]
+        beginwith = "cbircsum" + org_name_index
+        oldsum = get_csvdf(pencbirc, beginwith)
+        lensum = len(oldsum)
+        st.write("列表数据量: " + str(lensum))
+
+        beginwith = "cbircdtl" + org_name_index
+        dtl = get_csvdf(pencbirc, beginwith)
+        lendtl = len(dtl)
+        st.write("详情数据量: " + str(lendtl))
+        # get analysis data
+        beginwith = "cbircanalysis" + org_name_index
+        analysis = get_csvdf(pencbirc, beginwith)
+        lenanalysis = len(analysis)
+        st.write("拆分数据量: " + str(lenanalysis))
+
+        # listname
+        listname = "cbircsum" + org_name_index + get_nowdate() + ".csv"
+        # download list data
+        st.download_button(
+            "下载列表数据", data=oldsum.to_csv().encode("utf_8_sig"), file_name=listname
+        )
+        # detailname
+        detailname = "cbircdtl" + org_name_index + get_nowdate() + ".csv"
+        # download detail data
+        st.download_button(
+            "下载详情数据", data=dtl.to_csv().encode("utf_8_sig"), file_name=detailname
+        )
+        # analysisname
+        analysisname = "cbircanalysis" + org_name_index + get_nowdate() + ".csv"
+        # download analysis data
+        st.download_button(
+            "下载拆分数据", data=analysis.to_csv().encode("utf_8_sig"), file_name=analysisname
+        )
+    
+    st.markdown("#### 分类数据下载")
+
+    # download amt data
+    amtdf = get_cbircamt()
+    lenamt=len(amtdf)
+    st.write("共有"+str(lenamt)+"条金额数据")
+    amtname = "cbircamt" + get_nowdate() + ".csv"
     st.download_button(
-        "下载列表数据", data=oldsum.to_csv().encode("utf_8_sig"), file_name=listname
+        "下载金额数据", data=amtdf.to_csv().encode("utf_8_sig"), file_name=amtname
     )
-    # detailname
-    detailname = "cbircdtl" + org_name_index + get_nowdate() + ".csv"
-    # download detail data
+    # download law data
+    lawdf = get_lawcbirc()
+    lenlaw=len(lawdf['id'].unique())
+    st.write("共有"+str(lenlaw)+"条法律数据")
+    lawname = "cbirclaw" + get_nowdate() + ".csv"
     st.download_button(
-        "下载详情数据", data=dtl.to_csv().encode("utf_8_sig"), file_name=detailname
+        "下载法律数据", data=lawdf.to_csv().encode("utf_8_sig"), file_name=lawname
     )
-    # analysisname
-    analysisname = "cbircanalysis" + org_name_index + get_nowdate() + ".csv"
-    # download analysis data
+    # download location data
+    locdf = get_cbircloc()
+    lenloc=len(locdf)
+    st.write("共有"+str(lenloc)+"条地点数据")
+    locname = "cbircloc" + get_nowdate() + ".csv"
     st.download_button(
-        "下载拆分数据", data=analysis.to_csv().encode("utf_8_sig"), file_name=analysisname
+        "下载地点数据", data=locdf.to_csv().encode("utf_8_sig"), file_name=locname
+    )
+    # download litigant data
+    litdf = get_cbirclitigant()
+    lenlit=len(litdf['id'].unique())
+    st.write("共有"+str(lenlit)+"条当事人数据")
+    litname = "cbirclitigant" + get_nowdate() + ".csv"
+    st.download_button(
+        "下载当事人数据", data=litdf.to_csv().encode("utf_8_sig"), file_name=litname
     )
 
 
@@ -1355,6 +1402,8 @@ def get_cbirclitigant():
     df["orgls"] = df["orgls"].apply(literal_eval)
     # fillna
     df = df.fillna("")
+    cols=["id","peoplels","orgls","org"]
+    df = df[cols]
     return df
 
 
