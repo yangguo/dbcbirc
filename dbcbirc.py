@@ -23,7 +23,7 @@ from pyecharts import options as opts
 from pyecharts.charts import Bar, Line, Map, Pie
 from pyecharts.render import make_snapshot
 
-# from streamlit_echarts import Map as st_Map
+from streamlit_echarts import Map as st_Map
 from streamlit_echarts import st_pyecharts
 
 import snapshot as driver
@@ -34,7 +34,7 @@ from utils import df2aggrid, split_words
 
 # import matplotlib
 
-# mappath = "cbirc/map/chinageo.json"
+mappath = "cbirc/map/chinageo.json"
 pencbirc = "cbirc"
 # mapfolder = '../temp/citygeo.csv'
 urldtl = "https://www.cbirc.gov.cn/cn/view/pages/ItemDetail.html?docId="
@@ -43,6 +43,11 @@ org2name = {"银保监会机关": "jiguan", "银保监局本级": "benji", "银�
 
 # @st.cache(allow_output_mutation=True)
 def get_csvdf(penfolder, beginwith):
+    # read parquet file if exists
+    filepath = penfolder + "/" + beginwith + ".parquet"
+    # if os.path.exists(filepath):
+    #     df = pd.read_parquet(filepath)
+    # else:
     files2 = glob.glob(penfolder + "**/" + beginwith + "*.csv", recursive=True)
     dflist = []
     # filelist = []
@@ -55,6 +60,15 @@ def get_csvdf(penfolder, beginwith):
         df.reset_index(drop=True, inplace=True)
     else:
         df = pd.DataFrame()
+        # convert df to paquet
+        # df.to_parquet(penfolder + "/" + beginwith + ".parquet")
+    return df
+
+
+# read parquet
+def get_parquetdf(penfolder, beginwith):
+    filepath = penfolder + "/" + beginwith + ".parquet"
+    df = pd.read_parquet(filepath)
     return df
 
 
@@ -198,6 +212,27 @@ def searchdtl(
     wenhao_text = split_words(wenhao_text)
     event_text = split_words(event_text)
     # search by start_date and end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
+    # st.write(df[:5000])
+    # set index on label, province, 发布日期, and amount
+    # indexed_df = df.set_index(["label", "province", "发布日期", "amount"])
+    # # search by start_date and end_date, wenhao_text, people_text, event_text, law_text, penalty_text, org_text
+    # searchdf = indexed_df.loc[
+    #     (
+    #         slice(None),
+    #         slice(None),
+    #         slice(start_date, end_date),
+    #         slice(min_penalty, None),
+    #     ),
+    #     cols,
+    # ]
+    # searchdf = searchdf[
+    #     searchdf["标题"].str.contains(title_text)
+    #     & searchdf["文号"].str.contains(wenhao_text)
+    #     & searchdf["内容"].str.contains(event_text)
+    #     & searchdf["label"].isin(industry)
+    #     & searchdf["法律法规"].isin(law_select)
+    #     & searchdf["province"].isin(province_select)
+    # ]
     searchdf = df[
         (df["发布日期"] >= start_date)
         & (df["发布日期"] <= end_date)
@@ -377,10 +412,10 @@ def display_dfmonth(df):
     count_ls = df_org_count["count"].tolist()
 
     new_orgls, new_countls = count_by_province(org_ls, count_ls)
-    map = print_map(new_orgls, new_countls, "处罚地图", "处罚数量")
-    # st_pyecharts(map_data, map=map, width=800, height=650)
+    map_data, map = print_map(new_orgls, new_countls, "处罚地图", "处罚数量")
+    st_pyecharts(map_data, map=map, width=800, height=650)
     # display map
-    components.html(map.render_embed(), height=650)
+    # components.html(map_data.render_embed(), height=650)
     image3_text = "图三解析：处罚地图"
 
     pie, orgname = print_pie(org_ls, count_ls, "按发文机构统计")
@@ -489,7 +524,7 @@ def display_dfmonth(df):
 
         image1 = bar.render(path=os.path.join(pencbirc, t1 + "image1.html"))
         image2 = line.render(path=os.path.join(pencbirc, t1 + t1 + "image2.html"))
-        image3 = map.render(path=os.path.join(pencbirc, t1 + t1 + "image3.html"))
+        image3 = map_data.render(path=os.path.join(pencbirc, t1 + t1 + "image3.html"))
         image4 = pie.render(path=os.path.join(pencbirc, t1 + t1 + "image4.html"))
         image5 = bar3.render(path=os.path.join(pencbirc, t1 + t1 + "image5.html"))
         # 做title
@@ -1085,16 +1120,26 @@ def download_cbircsum(org_namels):
         oldsum = get_csvdf(pencbirc, beginwith)
         lensum = len(oldsum)
         st.write("列表数据量: " + str(lensum))
+        # get unique id number
+        idls = oldsum["docId"].unique()
+        st.write("id数量: " + str(len(idls)))
 
         beginwith = "cbircdtl" + org_name_index
         dtl = get_csvdf(pencbirc, beginwith)
         lendtl = len(dtl)
         st.write("详情数据量: " + str(lendtl))
+        # get unique id number
+        idls = dtl["id"].unique()
+        st.write("id数量: " + str(len(idls)))
+
         # get analysis data
         beginwith = "cbircanalysis" + org_name_index
         analysis = get_csvdf(pencbirc, beginwith)
         lenanalysis = len(analysis)
         st.write("拆分数据量: " + str(lenanalysis))
+        # get unique id number
+        idls = analysis["id"].unique()
+        st.write("id数量: " + str(len(idls)))
 
         # listname
         listname = "cbircsum" + org_name_index + get_nowdate() + ".csv"
@@ -1114,37 +1159,37 @@ def download_cbircsum(org_namels):
         st.download_button(
             "下载拆分数据", data=analysis.to_csv().encode("utf_8_sig"), file_name=analysisname
         )
-    
+
     st.markdown("#### 分类数据下载")
 
     # download amt data
     amtdf = get_cbircamt()
-    lenamt=len(amtdf)
-    st.write("共有"+str(lenamt)+"条金额数据")
+    lenamt = len(amtdf)
+    st.write("共有" + str(lenamt) + "条金额数据")
     amtname = "cbircamt" + get_nowdate() + ".csv"
     st.download_button(
         "下载金额数据", data=amtdf.to_csv().encode("utf_8_sig"), file_name=amtname
     )
     # download law data
     lawdf = get_lawcbirc()
-    lenlaw=len(lawdf['id'].unique())
-    st.write("共有"+str(lenlaw)+"条法律数据")
+    lenlaw = len(lawdf["id"].unique())
+    st.write("共有" + str(lenlaw) + "条法律数据")
     lawname = "cbirclaw" + get_nowdate() + ".csv"
     st.download_button(
         "下载法律数据", data=lawdf.to_csv().encode("utf_8_sig"), file_name=lawname
     )
     # download location data
     locdf = get_cbircloc()
-    lenloc=len(locdf)
-    st.write("共有"+str(lenloc)+"条地点数据")
+    lenloc = len(locdf)
+    st.write("共有" + str(lenloc) + "条地点数据")
     locname = "cbircloc" + get_nowdate() + ".csv"
     st.download_button(
         "下载地点数据", data=locdf.to_csv().encode("utf_8_sig"), file_name=locname
     )
     # download litigant data
     litdf = get_cbirclitigant()
-    lenlit=len(litdf['id'].unique())
-    st.write("共有"+str(lenlit)+"条当事人数据")
+    lenlit = len(litdf["id"].unique())
+    st.write("共有" + str(lenlit) + "条当事人数据")
     litname = "cbirclitigant" + get_nowdate() + ".csv"
     st.download_button(
         "下载当事人数据", data=litdf.to_csv().encode("utf_8_sig"), file_name=litname
@@ -1155,7 +1200,7 @@ def get_cbircamt():
     amtdf = get_csvdf(pencbirc, "cbircamt")
     # process amount
     amtdf["amount"] = amtdf["amount"].astype(float)
-    return amtdf
+    return amtdf[["id", "amount"]]
 
 
 def sum_amount_by_month(df):
@@ -1198,34 +1243,34 @@ def print_line(x_data, y_data, y_axis_name, title):
 def get_cbirclabel():
     labeldf = get_csvdf(pencbirc, "cbirclabel")
     # literal_eval apply to labels and scores
-    labeldf["labels"] = labeldf["labels"].apply(literal_eval)
-    labeldf["scores"] = labeldf["scores"].apply(literal_eval)
+    # labeldf["labels"] = labeldf["labels"].apply(literal_eval)
+    # labeldf["scores"] = labeldf["scores"].apply(literal_eval)
     # fillna
     labeldf = labeldf.fillna("")
-    return labeldf
+    return labeldf[["id", "label"]]
 
 
 def get_lawcbirc():
     lawdf = get_csvdf(pencbirc, "cbirclawdf")
     # fillna
     lawdf = lawdf.fillna("")
-    return lawdf
+    return lawdf[['id', '处理依据', '法律法规', '条文']]
 
 
 def get_cbircloc():
     locdf = get_csvdf(pencbirc, "cbircloc")
     # fillna
     locdf = locdf.fillna("")
-    return locdf
+    return locdf[['id', 'province', 'city', 'county']]
 
 
 # province_name为省份名称列表；province_values为各省份对应值；title_name为标题,dataname为值标签（如：处罚案例数量）
 def print_map(province_name, province_values, title_name, dataname):
-    # with open(mappath, "r", encoding="utf-8-sig") as f:
-    #     map = st_Map(
-    #         "china",
-    #         json.loads(f.read()),
-    #     )
+    with open(mappath, "r", encoding="utf-8-sig") as f:
+        map = st_Map(
+            "china",
+            json.loads(f.read()),
+        )
 
     map_data = (
         Map()
@@ -1245,7 +1290,7 @@ def print_map(province_name, province_values, title_name, dataname):
         )
     )
     # st_pyecharts(map_data, map=map, height=700)  # ,width=800 )
-    return map_data
+    return map_data, map
 
 
 # combine count by province
@@ -1253,17 +1298,18 @@ def count_by_province(orgls, countls):
     result = dict()
     for org in orgls:
         # replace orgname
-        new = (
-            org.replace("市", "")
-            .replace("省", "")
-            .replace("自治区", "")
-            .replace("回族", "")
-            .replace("壮族", "")
-            .replace("维吾尔", "")
-            .replace("特别行政区", "")
-        )
+        # new = (
+        #     org.replace("市", "")
+        #     .replace("省", "")
+        #     .replace("自治区", "")
+        #     .replace("回族", "")
+        #     .replace("壮族", "")
+        #     .replace("维吾尔", "")
+        #     .replace("特别行政区", "")
+        # )
+        new = org
         if org == "":
-            new = "北京"
+            new = "北京市"
 
         result[new] = countls[orgls.index(org)]
     new_orgls = result.keys()
@@ -1402,7 +1448,7 @@ def get_cbirclitigant():
     df["orgls"] = df["orgls"].apply(literal_eval)
     # fillna
     df = df.fillna("")
-    cols=["id","peoplels","orgls","org"]
+    cols = ["id", "peoplels", "orgls", "org"]
     df = df[cols]
     return df
 
