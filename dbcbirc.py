@@ -22,7 +22,6 @@ from docx.shared import Pt
 from pyecharts import options as opts
 from pyecharts.charts import Bar, Line, Map, Pie
 from pyecharts.render import make_snapshot
-
 from streamlit_echarts import Map as st_Map
 from streamlit_echarts import st_pyecharts
 
@@ -97,7 +96,9 @@ def get_cbircdetail(orgname):
     # reset index
     d1 = d0[["title", "subtitle", "date", "doc", "id"]].reset_index(drop=True)
     # format date
-    d1["date"] = pd.to_datetime(d1["date"]).dt.date
+    # d1["date"] = pd.to_datetime(d1["date"]).dt.date
+    d1["date"] = d1["date"].str.split(".").str[0]
+    d1["date"] = pd.to_datetime(d1["date"], format="%Y-%m-%d %H:%M:%S").dt.date
     # update column name
     d1.columns = ["标题", "文号", "发布日期", "内容", "id"]
     # fillna
@@ -160,6 +161,8 @@ def searchcbirc(
         "作出处罚决定的日期",
         "id",
         "label",
+        "amount",
+        "province",
     ]
     # split words
     wenhao_text = split_words(wenhao_text)
@@ -206,7 +209,7 @@ def searchdtl(
     law_select,
     province_select,
 ):
-    cols = ["标题", "文号", "发布日期", "内容", "id", "label"]
+    cols = ["标题", "文号", "发布日期", "内容", "id", "label", "amount", "province"]
     # split words
     title_text = split_words(title_text)
     wenhao_text = split_words(wenhao_text)
@@ -403,9 +406,10 @@ def display_dfmonth(df):
     )
     st.markdown("##### " + image2_text)
 
-    locdf = get_cbircloc()
+    # locdf = get_cbircloc()
     # merge df_month with locdf by id
-    df_month_loc = pd.merge(df_month, locdf, on="id", how="left")
+    # df_month_loc = pd.merge(df_month, locdf, on="id", how="left")
+    df_month_loc = df_month
     # count by province
     df_org_count = df_month_loc.groupby(["province"]).size().reset_index(name="count")
     org_ls = df_org_count["province"].tolist()
@@ -1047,7 +1051,7 @@ def split_eventdoc(d1):
         "行政处罚依据",
     ]
     r10["主要违法违规事实"] = r10["doc1"]
-    st.write(r10)
+    # st.write(r10)
     # combine all df
     alldf = pd.concat([comdf, r7, r8, r9, r10])
     return alldf
@@ -1204,10 +1208,11 @@ def get_cbircamt():
 
 
 def sum_amount_by_month(df):
-    amtdf = get_cbircamt()
-    df1 = pd.merge(
-        df, amtdf.drop_duplicates("id"), left_on="id", right_on="id", how="left"
-    )
+    # amtdf = get_cbircamt()
+    # df1 = pd.merge(
+    #     df, amtdf.drop_duplicates("id"), left_on="id", right_on="id", how="left"
+    # )
+    df1 = df
     df1["amount"] = df1["amount"].fillna(0)
     df1["发布日期"] = pd.to_datetime(df1["发布日期"]).dt.date
     # df=df[df['发文日期']>=pd.to_datetime('2020-01-01')]
@@ -1254,14 +1259,14 @@ def get_lawcbirc():
     lawdf = get_csvdf(pencbirc, "cbirclawdf")
     # fillna
     lawdf = lawdf.fillna("")
-    return lawdf[['id', '处理依据', '法律法规', '条文']]
+    return lawdf[["id", "处理依据", "法律法规", "条文"]]
 
 
 def get_cbircloc():
     locdf = get_csvdf(pencbirc, "cbircloc")
     # fillna
     locdf = locdf.fillna("")
-    return locdf[['id', 'province', 'city', 'county']]
+    return locdf[["id", "province", "city", "county"]]
 
 
 # province_name为省份名称列表；province_values为各省份对应值；title_name为标题,dataname为值标签（如：处罚案例数量）
