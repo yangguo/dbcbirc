@@ -26,6 +26,7 @@ from dbcbirc import (
     update_cbirclabel,
     update_sumeventdf,
     update_toupd,
+    uplink_cbircsum,
 )
 
 # set page config
@@ -41,13 +42,7 @@ backendurl = "http://localhost:8000"
 
 def main():
 
-    menu = [
-        "案例总数",
-        "案例搜索",
-        "案例更新",
-        "案例下载",
-        "案例分类",
-    ]
+    menu = ["案例总数", "案例搜索", "案例更新", "案例下载", "案例分类", "案例上线"]
     org_namels = ["银保监会机关", "银保监局本级", "银保监分局本级"]
     choice = st.sidebar.selectbox("选择", menu)
 
@@ -705,10 +700,13 @@ def main():
                     except Exception as e:
                         st.error("信息抽取失败")
                         st.write(e)
-    
+
     elif choice == "案例下载":
-        
+
         download_cbircsum(org_namels)
+
+    elif choice == "案例上线":
+        uplink_cbircsum()
 
 
 if __name__ == "__main__":
