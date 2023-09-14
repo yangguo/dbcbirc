@@ -26,6 +26,7 @@ from streamlit_echarts import Map as st_Map
 from streamlit_echarts import st_pyecharts
 
 import snapshot as driver
+from database import delete_data, get_collection, get_data, insert_data
 from utils import df2aggrid, split_words
 
 # from streamlit_tags import st_tags
@@ -1494,3 +1495,147 @@ def make_docx(title, text, image):  # 制作docx的函数，title以str形式传
     file_stream.seek(0)
     # document.save(t1+'.docx')
     return file_stream
+
+
+def uplink_cbircsum():
+    st.markdown("#### 案例数据上线")
+
+    # get old sumeventdf
+    oldsum2 = get_cbircdetail("")
+    # get lengh
+    oldlen = len(oldsum2)
+    st.write("案例数据量：" + str(oldlen))
+    # get id nunique
+    oldidn = oldsum2["id"].nunique()
+    st.write("案例数据id数：" + str(oldidn))
+    # drop duplicate by id
+    oldsum2.drop_duplicates(subset=["id"], inplace=True)
+
+    # detailname
+    detailname = "cbircdtlall" + get_nowdate() + ".csv"
+
+    # download lawdf data
+    lawdf = get_lawcbirc()
+    # get lengh
+    lawlen = len(lawdf)
+    st.write("法律数据量：" + str(lawlen))
+    # get id nunique
+    lawidn = lawdf["id"].nunique()
+    st.write("法律数据id数：" + str(lawidn))
+
+    # lawname
+    lawname = "cbirclawdf" + get_nowdate() + ".csv"
+
+    # download label data
+    labeldf = get_cbirclabel()
+    # get lengh
+    labellen = len(labeldf)
+    st.write("标签数据量：" + str(labellen))
+    # get id nunique
+    labelidn = labeldf["id"].nunique()
+    st.write("标签数据id数：" + str(labelidn))
+    # drop duplicate by id
+    labeldf.drop_duplicates(subset=["id"], inplace=True)
+
+    labelname = "cbirclabel" + get_nowdate() + ".csv"
+
+    # download amount data
+    amountdf = get_cbircamt()
+    # get lengh
+    amountlen = len(amountdf)
+    st.write("金额数据量：" + str(amountlen))
+    # get id nunique
+    amountidn = amountdf["id"].nunique()
+    st.write("金额数据id数：" + str(amountidn))
+    # drop duplicate by id
+    amountdf.drop_duplicates(subset=["id"], inplace=True)
+    amountname = "cbircamt" + get_nowdate() + ".csv"
+
+    # download people data
+    litdf = get_cbirclitigant()
+    # get lengh
+    litlen = len(litdf)
+    st.write("当事人数据量：" + str(litlen))
+    # get id nunique
+    lenlit = len(litdf["id"].unique())
+    st.write("当事人数据id数：" + str(lenlit))
+    # drop duplicate by id
+    litdf.drop_duplicates(subset=["id"], inplace=True)
+    litname = "cbirclitigant" + get_nowdate() + ".csv"
+
+    # download analysis data
+    analysisdf = get_cbircanalysis("")
+    # get lengh
+    analysislen = len(analysisdf)
+    st.write("分析数据量：" + str(analysislen))
+    # get id nunique
+    analysisidn = analysisdf["id"].nunique()
+    st.write("分析数据id数：" + str(analysisidn))
+    # drop duplicate by id
+    analysisdf.drop_duplicates(subset=["id"], inplace=True)
+    analysisname = "cbircanalysis" + get_nowdate() + ".csv"
+
+    # get collection
+    collection = get_collection("pencbirc", "cbircanalysis")
+
+    # delete data from the MongoDB collection
+    if st.button("删除案例数据"):
+        delete_data(collection)
+        st.success("案例数据删除成功！")
+
+    # get all online data
+    online_data = get_data(collection)
+
+    # get unique id number from online data
+    online_id = online_data["id"].nunique()
+
+    # display online data
+    st.write("在线案例数据量：" + str(online_id))
+
+    # get different data
+    diff_data = analysisdf[~analysisdf["id"].isin(online_data["id"])]
+
+    # Concatenate lists from 'orgls' and 'peoplels' columns and join into a string
+    litdf["people"] = litdf.apply(
+        lambda row: ", ".join(row["orgls"] + row["peoplels"]), axis=1
+    )
+
+    # update people column
+    diff_data2 = pd.merge(diff_data, litdf, on="id")
+    diff_data2["被处罚当事人"] = diff_data2["people"]
+    diff_data3 = diff_data2[
+        [
+            "标题",
+            "文号",
+            "发布日期",
+            "id",
+            "行政处罚决定书文号",
+            "被处罚当事人",
+            "主要违法违规事实",
+            "行政处罚依据",
+            "行政处罚决定",
+            "作出处罚决定的机关名称",
+            "作出处罚决定的日期",
+        ]
+    ]
+    diff_data4 = diff_data3[diff_data3["主要违法违规事实"].notnull()]
+    # convert date to datetime
+    diff_data4["发布日期"] = pd.to_datetime(diff_data4["发布日期"])
+    # fillna
+    diff_data4 = diff_data4.fillna("")
+
+    # download different data
+    st.download_button(
+        "下载差异数据",
+        data=diff_data4.to_csv().encode("utf_8_sig"),
+        file_name=analysisname,
+    )
+
+    # display different data
+    st.write("差异数据量：" + str(len(diff_data4)))
+    st.write(diff_data4)
+
+    # Insert data into the MongoDB collection
+    if st.button("更新上线案例数据"):
+        insert_data(diff_data4, collection)
+        st.success("更新案例数据上线成功！")
