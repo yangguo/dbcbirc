@@ -13,33 +13,35 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
-import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Pt
-from pyecharts import options as opts
-from pyecharts.charts import Bar, Line, Map, Pie
 from pyecharts.render import make_snapshot
-from streamlit_echarts import Map as st_Map
-from streamlit_echarts import st_pyecharts
+import plotly.express as px
 
 import snapshot as driver
 from database import delete_data, get_collection, get_data, insert_data
-from utils import df2aggrid, split_words
+from utils import split_words
 
 # from streamlit_tags import st_tags
 
 
 # import matplotlib
 
-mappath = "cbirc/map/chinageo.json"
+mappath = "map/china.json"
 pencbirc = "cbirc"
 # mapfolder = '../temp/citygeo.csv'
 urldtl = "https://www.cbirc.gov.cn/cn/view/pages/ItemDetail.html?docId="
 # choose orgname index
-org2name = {"银保监会机关": "jiguan", "银保监局本级": "benji", "银保监分局本级": "fenju", "": ""}
+org2name = {
+    "银保监会机关": "jiguan",
+    "银保监局本级": "benji",
+    "银保监分局本级": "fenju",
+    "": "",
+}
+
 
 # @st.cache(allow_output_mutation=True)
 def get_csvdf(penfolder, beginwith):
@@ -417,8 +419,8 @@ def display_dfmonth(df):
     count_ls = df_org_count["count"].tolist()
 
     new_orgls, new_countls = count_by_province(org_ls, count_ls)
-    map_data, map = print_map(new_orgls, new_countls, "处罚地图", "处罚数量")
-    st_pyecharts(map_data, map=map, width=800, height=650)
+    map_data = print_map(new_orgls, new_countls, "处罚地图")
+    # st_pyecharts(map_data, map=map, width=800, height=650)
     # display map
     # components.html(map_data.render_embed(), height=650)
     image3_text = "图三解析：处罚地图"
@@ -456,13 +458,17 @@ def display_dfmonth(df):
 
     # law type count
     lawtype = (
-        selected_lawdetail.groupby("法律法规")["id"].nunique().reset_index(name="数量统计")
+        selected_lawdetail.groupby("法律法规")["id"]
+        .nunique()
+        .reset_index(name="数量统计")
     )
     # sort by count
     lawtype = lawtype.sort_values(by="数量统计", ascending=False)
     x_data3 = lawtype["法律法规"].tolist()
     y_data3 = lawtype["数量统计"].tolist()
-    bar3, lawtype_selected = print_bar(x_data3[:20], y_data3[:20], "处罚数量", "前20法律法规统计")
+    bar3, lawtype_selected = print_bar(
+        x_data3[:20], y_data3[:20], "处罚数量", "前20法律法规统计"
+    )
 
     # 图五解析开始
     lawtype_count = lawtype[["法律法规", "数量统计"]]  # 把法律法规的数量进行统计
@@ -493,9 +499,13 @@ def display_dfmonth(df):
         .reset_index(name="数量统计")
     )
     # new_lawtype=lawdf.groupby(['法律法规','条文'])#%%%
-    new_lawtype["法律法规明细"] = new_lawtype["法律法规"] + "(" + new_lawtype["条文"] + ")"
+    new_lawtype["法律法规明细"] = (
+        new_lawtype["法律法规"] + "(" + new_lawtype["条文"] + ")"
+    )
 
-    lawtype_count = new_lawtype[["法律法规明细", "数量统计"]]  # 把法律法规的数量进行统计
+    lawtype_count = new_lawtype[
+        ["法律法规明细", "数量统计"]
+    ]  # 把法律法规的数量进行统计
     # pandas数据排序
     lawtype_count = lawtype_count.sort_values("数量统计", ascending=False)
     result5b = ""
@@ -548,7 +558,9 @@ def display_dfmonth(df):
             [image1_text, image2_text, image3_text, image4_text, image5_text],
             [image1, image2, image3, image4, image5],
         )
-        st.download_button("下载分析报告", data=file_name.read(), file_name="分析报告.docx")
+        st.download_button(
+            "下载分析报告", data=file_name.read(), file_name="分析报告.docx"
+        )
 
 
 # display event detail
@@ -562,7 +574,9 @@ def display_eventdetail(search_df):
     st.markdown("### 搜索结果" + "(" + str(total) + "条)")
     # display download button
     st.download_button(
-        "下载搜索结果", data=search_dfnew.to_csv().encode("utf_8_sig"), file_name="搜索结果.csv"
+        "下载搜索结果",
+        data=search_dfnew.to_csv().encode("utf_8_sig"),
+        file_name="搜索结果.csv",
     )
     # display columns
     discols = ["id", "标题", "文号", "发布日期", "label"]
@@ -571,15 +585,24 @@ def display_eventdetail(search_df):
     # change column name
     display_df.columns = ["id", "标题", "文号", "发布日期", "行业类型"]
 
-    # st.table(search_df)
-    data = df2aggrid(display_df)
+    # reset index
+    display_df.reset_index(drop=True, inplace=True)
+
+    data = st.dataframe(display_df, on_select="rerun", selection_mode="single-row")
+
+    selected_rows = data["selection"]["rows"]
+
+    # data = df2aggrid(display_df)
     # display data
-    selected_rows = data["selected_rows"]
+    # selected_rows = data["selected_rows"]
     if selected_rows == []:
         st.error("请先选择查看案例")
         st.stop()
 
-    id = selected_rows[0]["id"]
+    # get id column value from row number
+    id = display_df.loc[selected_rows[0], "id"]
+
+    # id = selected_rows[0]["id"]
     # select search_dfnew by id
     selected_rows_df = search_dfnew[search_dfnew["id"] == id]
     # transpose and set column name
@@ -649,12 +672,16 @@ def display_eventdetail(search_df):
     selected_rows_lawdetail = lawdf[lawdf["id"] == id]
 
     if len(selected_rows_lawdetail) > 0:
-
         # display lawdetail
         st.markdown("##### 处罚依据")
         lawdata = selected_rows_lawdetail[["法律法规", "条文"]]
         # display lawdata
-        lawdtl = df2aggrid(lawdata)
+        for i in range(len(lawdata)):
+            st.markdown(
+                str(i + 1) + ": " + lawdata.iloc[i, 0] + " " + lawdata.iloc[i, 1]
+            )
+
+        # lawdtl = df2aggrid(lawdata)
     #     selected_law = lawdtl["selected_rows"]
     #     if selected_law == []:
     #         st.error("请先选择查看监管条文")
@@ -684,7 +711,11 @@ def display_eventdetail(search_df):
 # get sumeventdf in page number range
 def get_sumeventdf(orgname, start, end):
     # choose orgname index
-    org_index = {"银保监会机关": "4113", "银保监局本级": "4114", "银保监分局本级": "4115"}
+    org_index = {
+        "银保监会机关": "4113",
+        "银保监局本级": "4114",
+        "银保监分局本级": "4115",
+    }
     org_name_index = org_index[orgname]
 
     baseurl = (
@@ -867,26 +898,53 @@ def get_eventdetail(eventsum, orgname):
 
 
 # print bar graphs
+# def print_bar(x_data, y_data, y_axis_name, title):
+#     # draw echarts bar chart
+#     bar = (
+#         Bar()
+#         .add_xaxis(xaxis_data=x_data)
+#         .add_yaxis(series_name=y_axis_name, y_axis=y_data, yaxis_index=0)
+#         .set_global_opts(
+#             title_opts=opts.TitleOpts(title=title),
+#             xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=-15)),
+#             visualmap_opts=opts.VisualMapOpts(max_=max(y_data), min_=min(y_data)),
+#         )
+#     )
+#     # use events
+#     events = {
+#         "click": "function(params) { console.log(params.name); return params.name }",
+#         # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
+#     }
+#     # use events
+#     clickevent = st_pyecharts(bar, events=events, height=400)
+#     return bar, clickevent
+
+
 def print_bar(x_data, y_data, y_axis_name, title):
-    # draw echarts bar chart
-    bar = (
-        Bar()
-        .add_xaxis(xaxis_data=x_data)
-        .add_yaxis(series_name=y_axis_name, y_axis=y_data, yaxis_index=0)
-        .set_global_opts(
-            title_opts=opts.TitleOpts(title=title),
-            xaxis_opts=opts.AxisOpts(axislabel_opts=opts.LabelOpts(rotate=-15)),
-            visualmap_opts=opts.VisualMapOpts(max_=max(y_data), min_=min(y_data)),
-        )
+    # Create a DataFrame from the input data
+    data = pd.DataFrame({"月份": x_data, y_axis_name: y_data})
+    # Create the bar chart
+    fig = px.bar(
+        data,
+        x="月份",
+        y=y_axis_name,
+        title=title,
+        color=y_axis_name,
+        text=y_axis_name,
+        color_continuous_scale=px.colors.sequential.Viridis,
     )
-    # use events
-    events = {
-        "click": "function(params) { console.log(params.name); return params.name }",
-        # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
-    }
-    # use events
-    clickevent = st_pyecharts(bar, events=events, height=400)
-    return bar, clickevent
+
+    # Display the chart
+    event = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+
+    monthselected = event["selection"]["point_indices"]
+
+    if monthselected == []:
+        clickevent = None
+    else:
+        clickevent = x_data[monthselected[0]]
+
+    return fig, clickevent
 
 
 # update the analysis data
@@ -957,9 +1015,7 @@ def split_eventdoc(d1):
     r7, d8 = extract_info(d7, pat7)
     pat8 = r"((?:被处罚|当事人：|受处罚|姓名).*?)((?:。|我|你|近期|一、违法|一、经查|我局对|依据《|根据《|经查|我局自|我局于|我局在|依据有关法律|\d{4}年\d?\d月\d?\d日起|\d{4}年\d?\d月\d?\d日至|\d{4}年\d?\d月\d?\d日).*?。)((?:你公司|你作为|上述事实|综上|我局认为|上述未|上述行为|上述违法|根据|依据《|以上行为|该公司上述).*。)(.*?)((?:\d\d\d\d|.{4})年[^，,、]*日)"
     r8, d9 = extract_info(d8, pat8)
-    pat9 = (
-        r"(.*?)((?:我分局|我会|本会|经查|你公司|依据).*?。)([^。]*?(?:依据|我局|根据).*。)(中国[^。]*)(.{4}年.*)"
-    )
+    pat9 = r"(.*?)((?:我分局|我会|本会|经查|你公司|依据).*?。)([^。]*?(?:依据|我局|根据).*。)(中国[^。]*)(.{4}年.*)"
     r9, d10 = extract_info(d9, pat9)
 
     comdf = r6
@@ -1113,11 +1169,9 @@ def lawls2dict(ls):
 
 
 def download_cbircsum(org_namels):
-
     st.markdown("#### 案例数据下载")
 
     for orgname in org_namels:
-
         st.markdown("##### " + orgname)
         # get orgname
         org_name_index = org2name[orgname]
@@ -1162,7 +1216,9 @@ def download_cbircsum(org_namels):
         analysisname = "cbircanalysis" + org_name_index + get_nowdate() + ".csv"
         # download analysis data
         st.download_button(
-            "下载拆分数据", data=analysis.to_csv().encode("utf_8_sig"), file_name=analysisname
+            "下载拆分数据",
+            data=analysis.to_csv().encode("utf_8_sig"),
+            file_name=analysisname,
         )
 
     st.markdown("#### 分类数据下载")
@@ -1225,25 +1281,44 @@ def sum_amount_by_month(df):
     # print line charts
 
 
+# def print_line(x_data, y_data, y_axis_name, title):
+#     # draw echarts line chart
+#     line = (
+#         Line()
+#         .add_xaxis(x_data)
+#         .add_yaxis(y_axis_name, y_data, label_opts=opts.LabelOpts(is_show=True))
+#         .set_global_opts(
+#             title_opts=opts.TitleOpts(title=title),
+#             # legend_opts=opts.LegendOpts(pos_top="48%"),
+#         )
+#     )
+#     # use events
+#     events = {
+#         "click": "function(params) { console.log(params.name); return params.name }",
+#         # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
+#     }
+#     # use events
+#     clickevent = st_pyecharts(line, events=events, height=400)
+#     return line, clickevent
+
+
 def print_line(x_data, y_data, y_axis_name, title):
-    # draw echarts line chart
-    line = (
-        Line()
-        .add_xaxis(x_data)
-        .add_yaxis(y_axis_name, y_data, label_opts=opts.LabelOpts(is_show=True))
-        .set_global_opts(
-            title_opts=opts.TitleOpts(title=title),
-            # legend_opts=opts.LegendOpts(pos_top="48%"),
-        )
-    )
-    # use events
-    events = {
-        "click": "function(params) { console.log(params.name); return params.name }",
-        # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
-    }
-    # use events
-    clickevent = st_pyecharts(line, events=events, height=400)
-    return line, clickevent
+    # Create a DataFrame from the input data
+    data = pd.DataFrame({"月份": x_data, y_axis_name: y_data})
+    # Create the line chart
+    fig = px.line(data, x="月份", y=y_axis_name, title=title, text=y_axis_name)
+
+    # Display the chart
+    event = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+
+    monthselected = event["selection"]["point_indices"]
+
+    if monthselected == []:
+        clickevent = None
+    else:
+        clickevent = x_data[monthselected[0]]
+
+    return fig, clickevent
 
 
 def get_cbirclabel():
@@ -1270,33 +1345,76 @@ def get_cbircloc():
     return locdf[["id", "province", "city", "county"]]
 
 
-# province_name为省份名称列表；province_values为各省份对应值；title_name为标题,dataname为值标签（如：处罚案例数量）
-def print_map(province_name, province_values, title_name, dataname):
-    with open(mappath, "r", encoding="utf-8-sig") as f:
-        map = st_Map(
-            "china",
-            json.loads(f.read()),
-        )
+# # province_name为省份名称列表；province_values为各省份对应值；title_name为标题,dataname为值标签（如：处罚案例数量）
+# def print_map(province_name, province_values, title_name, dataname):
+#     with open(mappath, "r", encoding="utf-8-sig") as f:
+#         map = st_Map(
+#             "china",
+#             json.loads(f.read()),
+#         )
 
-    map_data = (
-        Map()
-        .add(
-            dataname,
-            [list(z) for z in zip(province_name, province_values)],
-            "china",
-            is_roam=False,
-            is_map_symbol_show=False,
-        )
-        .set_series_opts(label_opts=opts.LabelOpts(is_show=True))
-        .set_global_opts(
-            title_opts=opts.TitleOpts(title=title_name),
-            visualmap_opts=opts.VisualMapOpts(
-                max_=max(province_values)  # , range_color=["#F3F781", "#D04A02"]
-            ),
-        )
+#     map_data = (
+#         Map()
+#         .add(
+#             dataname,
+#             [list(z) for z in zip(province_name, province_values)],
+#             "china",
+#             is_roam=False,
+#             is_map_symbol_show=False,
+#         )
+#         .set_series_opts(label_opts=opts.LabelOpts(is_show=True))
+#         .set_global_opts(
+#             title_opts=opts.TitleOpts(title=title_name),
+#             visualmap_opts=opts.VisualMapOpts(
+#                 max_=max(province_values)  # , range_color=["#F3F781", "#D04A02"]
+#             ),
+#         )
+#     )
+#     # st_pyecharts(map_data, map=map, height=700)  # ,width=800 )
+#     return map_data, map
+
+
+def print_map(province_name, province_values, title_name):
+    # load the GeoJSON file
+    china_geojson = json.load(open(mappath, "r", encoding="utf-8-sig"))
+
+    # st.write(china_geojson)
+
+    # Create a DataFrame from the provided data
+    data = pd.DataFrame({"省份": province_name, "处罚数量": province_values})
+    # Create the choropleth map
+    # fig = px.choropleth(
+    fig = px.choropleth_mapbox(
+        data,
+        geojson=china_geojson,
+        featureidkey="properties.name",
+        locations="省份",
+        color="处罚数量",
+        color_continuous_scale="Viridis",
+        mapbox_style="carto-positron",
+        zoom=2,
+        center={"lat": 35, "lon": 105},
+        # scope='asia',
+        title=title_name,
     )
-    # st_pyecharts(map_data, map=map, height=700)  # ,width=800 )
-    return map_data, map
+
+    # Add text labels
+    fig.update_traces(
+        text=data["处罚数量"],
+    )
+
+    # Update geos
+    fig.update_geos(
+        visible=False,
+        fitbounds="locations",
+    )
+
+    # Update layout
+    fig.update_layout(title_text=title_name, title_x=0.5)
+
+    # Display the chart in Streamlit
+    st.plotly_chart(fig, use_container_width=True)
+    return fig
 
 
 # combine count by province
@@ -1324,31 +1442,55 @@ def count_by_province(orgls, countls):
 
 
 # print pie charts
+# def print_pie(namels, valuels, title):
+#     pie = (
+#         Pie()
+#         .add(
+#             "",
+#             [list(z) for z in zip(namels, valuels)],
+#             radius=["30%", "60%"],
+#             # center=["35%", "50%"]
+#         )
+#         # set legend position
+#         .set_global_opts(
+#             title_opts=opts.TitleOpts(title=title)
+#             # set legend position to down
+#             ,
+#             legend_opts=opts.LegendOpts(pos_bottom="bottom"),
+#             visualmap_opts=opts.VisualMapOpts(max_=max(valuels)),
+#         )
+#         .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {c}"))
+#     )
+#     events = {
+#         "click": "function(params) { console.log(params.name); return params.name }",
+#         # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
+#     }
+#     clickevent = st_pyecharts(pie, events=events, height=650)  # width=800)
+#     return pie, clickevent
+
+
 def print_pie(namels, valuels, title):
-    pie = (
-        Pie()
-        .add(
-            "",
-            [list(z) for z in zip(namels, valuels)],
-            radius=["30%", "60%"],
-            # center=["35%", "50%"]
-        )
-        # set legend position
-        .set_global_opts(
-            title_opts=opts.TitleOpts(title=title)
-            # set legend position to down
-            ,
-            legend_opts=opts.LegendOpts(pos_bottom="bottom"),
-            visualmap_opts=opts.VisualMapOpts(max_=max(valuels)),
-        )
-        .set_series_opts(label_opts=opts.LabelOpts(formatter="{b}: {c}"))
+    data = pd.DataFrame({"names": namels, "values": valuels})
+
+    fig = px.pie(
+        data,
+        names="names",
+        values="values",
+        title=title,
+        labels={"names": "名称", "values": "数量"},
     )
-    events = {
-        "click": "function(params) { console.log(params.name); return params.name }",
-        # "dblclick":"function(params) { return [params.type, params.name, params.value] }"
-    }
-    clickevent = st_pyecharts(pie, events=events, height=650)  # width=800)
-    return pie, clickevent
+    fig.update_traces(textinfo="label+percent", insidetextorientation="radial")
+    # Display the chart
+    event = st.plotly_chart(fig, use_container_width=True, on_select="rerun")
+
+    monthselected = event["selection"]["point_indices"]
+
+    if monthselected == []:
+        clickevent = None
+    else:
+        clickevent = namels[monthselected[0]]
+
+    return fig, clickevent
 
 
 def update_cbirclabel():
@@ -1409,7 +1551,9 @@ def update_cbirclabel():
         savename = "cbirc_toamt" + get_nowdate() + ".csv"
         # download detail data
         st.download_button(
-            "下载案例数据", data=amtupddf.to_csv().encode("utf_8_sig"), file_name=savename
+            "下载案例数据",
+            data=amtupddf.to_csv().encode("utf_8_sig"),
+            file_name=savename,
         )
 
     labelupddf = anadf[anadf["id"].isin(labelupdidls)]
@@ -1420,7 +1564,9 @@ def update_cbirclabel():
         savename = "cbirc_tolabel" + get_nowdate() + ".csv"
         # download detail data
         st.download_button(
-            "下载案例数据", data=labelupddf.to_csv().encode("utf_8_sig"), file_name=savename
+            "下载案例数据",
+            data=labelupddf.to_csv().encode("utf_8_sig"),
+            file_name=savename,
         )
 
     locupddf = anadf[anadf["id"].isin(locupdidls)]
@@ -1431,7 +1577,9 @@ def update_cbirclabel():
         savename = "cbirc_toloc" + get_nowdate() + ".csv"
         # download detail data
         st.download_button(
-            "下载案例数据", data=locupddf.to_csv().encode("utf_8_sig"), file_name=savename
+            "下载案例数据",
+            data=locupddf.to_csv().encode("utf_8_sig"),
+            file_name=savename,
         )
 
     litigantupddf = anadf[anadf["id"].isin(litigantupdidls)]
@@ -1459,7 +1607,9 @@ def get_cbirclitigant():
     return df
 
 
-def make_docx(title, text, image):  # 制作docx的函数，title以str形式传入，其他以list的形式传入，输出为字符串的形式
+def make_docx(
+    title, text, image
+):  # 制作docx的函数，title以str形式传入，其他以list的形式传入，输出为字符串的形式
     document = Document()
 
     # st.write(title_str)
@@ -1485,7 +1635,9 @@ def make_docx(title, text, image):  # 制作docx的函数，title以str形式传
         document.styles["Normal"]._element.rPr.rFonts.set(
             qn("w:eastAsia"), "FangSong"
         )  # 设置中文字体使用字体2->宋体
-        document.add_picture(t + ".png", width=docx.shared.Inches(5.4))  # 6英尺是最大宽度
+        document.add_picture(
+            t + ".png", width=docx.shared.Inches(5.4)
+        )  # 6英尺是最大宽度
         # print('当前图像高度', str(document.inline_shapes[0].height)+'当前图像宽度'+str(document.inline_shapes[0].width)) # 打印当前图片大小
         last_paragraph = document.paragraphs[-1]
         last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -1512,7 +1664,7 @@ def uplink_cbircsum():
     oldsum2.drop_duplicates(subset=["id"], inplace=True)
 
     # detailname
-    detailname = "cbircdtlall" + get_nowdate() + ".csv"
+    # detailname = "cbircdtlall" + get_nowdate() + ".csv"
 
     # download lawdf data
     lawdf = get_lawcbirc()
@@ -1524,7 +1676,7 @@ def uplink_cbircsum():
     st.write("法律数据id数：" + str(lawidn))
 
     # lawname
-    lawname = "cbirclawdf" + get_nowdate() + ".csv"
+    # lawname = "cbirclawdf" + get_nowdate() + ".csv"
 
     # download label data
     labeldf = get_cbirclabel()
@@ -1537,7 +1689,7 @@ def uplink_cbircsum():
     # drop duplicate by id
     labeldf.drop_duplicates(subset=["id"], inplace=True)
 
-    labelname = "cbirclabel" + get_nowdate() + ".csv"
+    # labelname = "cbirclabel" + get_nowdate() + ".csv"
 
     # download amount data
     amountdf = get_cbircamt()
@@ -1549,7 +1701,7 @@ def uplink_cbircsum():
     st.write("金额数据id数：" + str(amountidn))
     # drop duplicate by id
     amountdf.drop_duplicates(subset=["id"], inplace=True)
-    amountname = "cbircamt" + get_nowdate() + ".csv"
+    # amountname = "cbircamt" + get_nowdate() + ".csv"
 
     # download people data
     litdf = get_cbirclitigant()
@@ -1561,7 +1713,7 @@ def uplink_cbircsum():
     st.write("当事人数据id数：" + str(lenlit))
     # drop duplicate by id
     litdf.drop_duplicates(subset=["id"], inplace=True)
-    litname = "cbirclitigant" + get_nowdate() + ".csv"
+    # litname = "cbirclitigant" + get_nowdate() + ".csv"
 
     # download analysis data
     analysisdf = get_cbircanalysis("")

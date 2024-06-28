@@ -41,7 +41,6 @@ backendurl = "http://localhost:8000"
 
 
 def main():
-
     menu = ["案例总数", "案例搜索", "案例更新", "案例下载", "案例分类", "案例上线"]
     org_namels = ["银保监会机关", "银保监局本级", "银保监分局本级"]
     choice = st.sidebar.selectbox("选择", menu)
@@ -70,7 +69,9 @@ def main():
             display_cbircsum(dtl)
 
         # choose orgname index
-        org_name = st.sidebar.selectbox("机构", ["银保监会机关", "银保监局本级", "银保监分局本级"])
+        org_name = st.sidebar.selectbox(
+            "机构", ["银保监会机关", "银保监局本级", "银保监分局本级"]
+        )
         # choose page start number and end number
         start_num = st.sidebar.number_input("起始页", value=1, min_value=1)
         # convert to int
@@ -159,7 +160,7 @@ def main():
             # get cbircdetail
             df = get_cbircanalysis("")
             # get length of old eventdf
-            oldlen = len(df)
+            # oldlen = len(df)
             # get min and max date of old eventdf
             min_date = df["发布日期"].min()
             max_date = df["发布日期"].max()
@@ -203,7 +204,9 @@ def main():
                     province = st.multiselect("处罚省份", provlist)
 
                 with col2:
-                    end_date = st.date_input("结束日期", value=max_date, min_value=min_date)
+                    end_date = st.date_input(
+                        "结束日期", value=max_date, min_value=min_date
+                    )
                     # input law keyword
                     # law_text = st.text_input("处罚依据关键词")
                     # choose law using multiselect
@@ -274,7 +277,7 @@ def main():
             # get cbircdetail
             df = get_cbircdetail("")
             # get length of old eventdf
-            oldlen = len(df)
+            # oldlen = len(df)
             # get min and max date of old eventdf
             min_date = df["发布日期"].min()
             max_date = df["发布日期"].max()
@@ -315,7 +318,9 @@ def main():
                     # choose province using multiselect
                     province = st.multiselect("处罚省份", provlist)
                 with col2:
-                    end_date = st.date_input("结束日期", value=max_date, min_value=min_date)
+                    end_date = st.date_input(
+                        "结束日期", value=max_date, min_value=min_date
+                    )
                     # input wenhao keyword
                     wenhao_text = st.text_input("文号")
                     # choose industry category of banking or insurance
@@ -377,7 +382,16 @@ def main():
 
     elif choice == "案例分类":
         options = st.sidebar.radio(
-            "选项", ["生成待标签案例", "处罚金额分析", "案例批量分类", "监管地区分析", "当事人分析", "文本分类", "信息抽取"]
+            "选项",
+            [
+                "生成待标签案例",
+                "处罚金额分析",
+                "案例批量分类",
+                "监管地区分析",
+                "当事人分析",
+                "文本分类",
+                "信息抽取",
+            ],
         )
 
         if options == "生成待标签案例":
@@ -506,7 +520,6 @@ def main():
                 # button for generate label text
                 classify_button = st.button("案例分类")
                 if classify_button:
-
                     if labeltext == "":
                         st.error("输入标签列表")
                         labellist = []
@@ -702,7 +715,6 @@ def main():
                         st.write(e)
 
     elif choice == "案例下载":
-
         download_cbircsum(org_namels)
 
     elif choice == "案例上线":
