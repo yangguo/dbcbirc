@@ -1,28 +1,24 @@
-import io
-from ast import literal_eval
-
 import pandas as pd
-import requests
 import streamlit as st
 
 from dbcbirc import (
     display_cbircsum,
     display_eventdetail,
     download_cbircsum,
-    generate_lawdf,
-    get_cbircamt,
+    # generate_lawdf,
+    get_cbirccat,
     get_cbircanalysis,
     get_cbircdetail,
-    get_cbirclabel,
-    get_cbircloc,
+    # get_cbirclabel,
+    # get_cbircloc,
     get_cbircsum,
     get_cbirctoupd,
     get_eventdetail,
-    get_lawcbirc,
+    # get_lawcbirc,
     get_sumeventdf,
     searchcbirc,
     searchdtl,
-    update_cbircanalysis,
+    # update_cbircanalysis,
     update_cbirclabel,
     update_sumeventdf,
     update_toupd,
@@ -121,24 +117,24 @@ def main():
                     st.error("没有更新的案例")
 
         # button to refresh page
-        refreshbutton = st.sidebar.button("刷新页面")
-        if refreshbutton:
-            st.experimental_rerun()
+        # refreshbutton = st.sidebar.button("刷新页面")
+        # if refreshbutton:
+        #     st.experimental_rerun()
 
         # convert eventdf to lawdf
-        lawdfconvert = st.sidebar.button("处罚依据分析")
-        if lawdfconvert:
-            eventdf = get_cbircdetail("")
-            lawdf = generate_lawdf(eventdf)
-            # savedf(lawdf,'lawdf')
-            st.success("处罚依据分析完成")
-            st.write(lawdf.sample(20))
+        # lawdfconvert = st.sidebar.button("处罚依据分析")
+        # if lawdfconvert:
+        #     eventdf = get_cbircdetail("")
+        #     lawdf = generate_lawdf(eventdf)
+        #     # savedf(lawdf,'lawdf')
+        #     st.success("处罚依据分析完成")
+        #     st.write(lawdf.sample(20))
 
         # refresh data button
-        updatebutton = st.sidebar.button("拆分数据")
-        if updatebutton:
-            update_cbircanalysis(org_name)
-            st.success("数据拆分完成")
+        # updatebutton = st.sidebar.button("拆分数据")
+        # if updatebutton:
+        #     update_cbircanalysis(org_name)
+        #     st.success("数据拆分完成")
 
     elif choice == "案例搜索":
         st.subheader("案例搜索")
@@ -151,36 +147,40 @@ def main():
         search_type = st.sidebar.radio(
             "搜索类型",
             [
-                "案情经过",
+                # "案情经过",
                 "案情分类",
             ],
         )
 
         if search_type == "案情分类":
             # get cbircdetail
+            dfdtl = get_cbircdetail("")
+            # get cbircdetail
             df = get_cbircanalysis("")
             # get length of old eventdf
             # oldlen = len(df)
             # get min and max date of old eventdf
-            min_date = df["发布日期"].min()
-            max_date = df["发布日期"].max()
+            min_date = dfdtl["发布日期"].min()
+            max_date = dfdtl["发布日期"].max()
             # get cbirclabel
-            labeldf = get_cbirclabel()
+            # labeldf = get_cbirclabel()
             # get cbircamt
-            cbircamt = get_cbircamt()
+            cbircamt = get_cbirccat()
             # get lawcbirc
-            lawcbirc = get_lawcbirc()
+            # lawcbirc = get_lawcbirc()
             # get lawlist
-            lawlist = lawcbirc["法律法规"].unique()
+            # lawlist = lawcbirc["法律法规"].unique()
             # get cbircloc
-            cbircloc = get_cbircloc()
+            # cbircloc = get_cbircloc()
             # get province list
-            provlist = cbircloc["province"].unique()
+            # provlist = cbircloc["province"].unique()
             # merge cbircdetail, cbirclabel,cbircamt and lawcbirc by id
-            dfl = pd.merge(df, labeldf, on="id", how="left")
+            # dfl = pd.merge(df, labeldf, on="id", how="left")
+            dfl = pd.merge(dfdtl, df, on="id", how="left")
             dfl = pd.merge(dfl, cbircamt, on="id", how="left")
-            dfl = pd.merge(dfl, lawcbirc, on="id", how="left")
-            dfl = pd.merge(dfl, cbircloc, on="id", how="left")
+            # dfl = pd.merge(dfl, lawcbirc, on="id", how="left")
+            # dfl = pd.merge(dfl, cbircloc, on="id", how="left")
+            # st.write(dfl)
             # one years ago
             one_year_ago = max_date - pd.Timedelta(days=365 * 1)
             # use form
@@ -199,9 +199,11 @@ def main():
                     # input event keyword
                     event_text = st.text_input("案情关键词")
                     # choose industry category using multiselect in banking and insurance
-                    industry = st.multiselect("行业", ["银行", "保险"])
+                    # industry = st.multiselect("行业", ["银行", "保险"])
+                    industry = st.text_input("行业")
                     # choose province using multiselect
-                    province = st.multiselect("处罚省份", provlist)
+                    # province = st.multiselect("处罚省份", provlist)
+                    province = st.text_input("处罚省份")
 
                 with col2:
                     end_date = st.date_input(
@@ -210,7 +212,8 @@ def main():
                     # input law keyword
                     # law_text = st.text_input("处罚依据关键词")
                     # choose law using multiselect
-                    law_text = st.multiselect("处罚依据", lawlist)
+                    # law_text = st.multiselect("处罚依据", lawlist)
+                    law_text = st.text_input("处罚依据")
                     # input penalty keyword
                     penalty_text = st.text_input("处罚决定关键词")
                     # input org keyword
@@ -233,12 +236,12 @@ def main():
                 ):
                     st.warning("请输入搜索关键词")
                     # st.stop()
-                if industry == []:
-                    industry = ["银行", "保险"]
-                if law_text == []:
-                    law_text = lawlist
-                if province == []:
-                    province = provlist
+                # if industry == []:
+                #     industry = ["银行", "保险"]
+                # if law_text == []:
+                #     law_text = lawlist
+                # if province == []:
+                #     province = provlist
 
                 st.session_state["keywords_cbirc"] = [
                     start_date,
@@ -282,22 +285,26 @@ def main():
             min_date = df["发布日期"].min()
             max_date = df["发布日期"].max()
             # get cbirclabel
-            cbirclabel = get_cbirclabel()
+            # cbirclabel = get_cbirclabel()
             # get cbircamt
-            cbircamt = get_cbircamt()
+            cbircamt = get_cbirccat()
+            # st.write(cbircamt)
             # get lawcbirc
-            lawcbirc = get_lawcbirc()
+            # lawcbirc = get_lawcbirc()
             # get lawlist
-            lawlist = lawcbirc["法律法规"].unique()
+            # lawlist = lawcbirc["法律法规"].unique()
             # get cbircloc
-            cbircloc = get_cbircloc()
+            # cbircloc = get_cbircloc()
             # get province list
-            provlist = cbircloc["province"].unique()
+            # provlist = cbircloc["province"].unique()
+            # provlist = cbircamt["province"].unique()
+            # get industry list
+            # industrylist = cbircamt["industry"].unique()
             # merge cbircdetail, cbirclabel,cbircamt and lawcbirc by id
-            dfl = pd.merge(df, cbirclabel, on="id", how="left")
-            dfl = pd.merge(dfl, cbircamt, on="id", how="left")
-            dfl = pd.merge(dfl, lawcbirc, on="id", how="left")
-            dfl = pd.merge(dfl, cbircloc, on="id", how="left")
+            # dfl = pd.merge(df, cbirclabel, on="id", how="left")
+            dfl = pd.merge(df, cbircamt, on="id", how="left")
+            # dfl = pd.merge(dfl, lawcbirc, on="id", how="left")
+            # dfl = pd.merge(dfl, cbircloc, on="id", how="left")
 
             # one years ago
             one_year_ago = max_date - pd.Timedelta(days=365 * 1)
@@ -316,7 +323,8 @@ def main():
                     # input minimum penalty amount
                     min_penalty = st.number_input("最低处罚金额", value=0)
                     # choose province using multiselect
-                    province = st.multiselect("处罚省份", provlist)
+                    # province = st.multiselect("处罚省份", provlist)
+                    province = st.text_input("处罚省份")
                 with col2:
                     end_date = st.date_input(
                         "结束日期", value=max_date, min_value=min_date
@@ -324,9 +332,11 @@ def main():
                     # input wenhao keyword
                     wenhao_text = st.text_input("文号")
                     # choose industry category of banking or insurance
-                    industry = st.multiselect("行业", ["银行", "保险"])
+                    # industry = st.multiselect("行业", industrylist)
+                    industry = st.text_input("行业")
                     # choose reference law
-                    law_select = st.multiselect("处罚依据", lawlist)
+                    # law_select = st.multiselect("处罚依据", lawlist)
+                    law_select = st.text_input("处罚依据")
                 # search button
                 searchbutton = st.form_submit_button("搜索")
 
@@ -335,12 +345,12 @@ def main():
                 if title_text == "" and event_text == "" and wenhao_text == "":
                     st.warning("请输入搜索关键词")
                     # st.stop()
-                if industry == []:
-                    industry = ["银行", "保险"]
-                if law_select == []:
-                    law_select = lawlist
-                if province == []:
-                    province = provlist
+                # if industry == []:
+                #     industry = industrylist
+                # if law_select == []:
+                #     law_select = lawlist
+                # if province == []:
+                #     province = provlist
                 st.session_state["keywords_cbirc"] = [
                     start_date,
                     end_date,
@@ -385,12 +395,12 @@ def main():
             "选项",
             [
                 "生成待标签案例",
-                "处罚金额分析",
-                "案例批量分类",
-                "监管地区分析",
-                "当事人分析",
-                "文本分类",
-                "信息抽取",
+                # "处罚金额分析",
+                # "案例批量分类",
+                # "监管地区分析",
+                # "当事人分析",
+                # "文本分类",
+                # "信息抽取",
             ],
         )
 
@@ -400,319 +410,319 @@ def main():
             if labeltext_button:
                 update_cbirclabel()
 
-        elif options == "处罚金额分析":
-            # upload file button
-            upload_file = st.file_uploader("上传文件", type=["csv"])
-            # if file not null
-            if upload_file is None:
-                st.error("请上传文件")
-            else:
-                # read csv file into pandas dataframe
-                df = pd.read_csv(upload_file)
-                # data sample
-                st.markdown("数据样例")
-                st.write(df.head())
-                # get column name list
-                col_list = df.columns.tolist()
-                # choose id column
-                idcol = st.selectbox("选择id字段", col_list)
-                # choose content column
-                contentcol = st.selectbox("选择内容字段", col_list)
-                # button for penalty amount analysis
-                amount_button = st.button("处罚金额分析")
-                if amount_button:
-                    # get penalty amount analysis result
-                    try:
-                        url = backendurl + "/amtanalysis"
-                        # Convert dataframe to BytesIO object (for parsing as file into FastAPI later)
-                        file_bytes_obj = io.BytesIO()
-                        df.to_csv(
-                            file_bytes_obj, index=False
-                        )  # write to BytesIO buffer
-                        file_bytes_obj.seek(0)  # Reset pointer to avoid EmptyDataError
-                        payload = {
-                            "idcol": idcol,
-                            "contentcol": contentcol,
-                            # "df_in": df.to_json(),
-                        }
-                        files = {"file": file_bytes_obj}
-                        headers = {}
-                        res = requests.post(
-                            url,
-                            headers=headers,
-                            params=payload,
-                            files=files,
-                        )
-                        st.success("处罚金额分析完成")
-                        # get result
-                        result = res.json()
-                        # convert result to dataframe
-                        result_df = pd.read_json(result)
-                        # download result
-                        st.download_button(
-                            label="下载结果",
-                            data=result_df.to_csv().encode("utf-8-sig"),
-                            file_name="amtresult.csv",
-                            mime="text/csv",
-                        )
+        # elif options == "处罚金额分析":
+        #     # upload file button
+        #     upload_file = st.file_uploader("上传文件", type=["csv"])
+        #     # if file not null
+        #     if upload_file is None:
+        #         st.error("请上传文件")
+        #     else:
+        #         # read csv file into pandas dataframe
+        #         df = pd.read_csv(upload_file)
+        #         # data sample
+        #         st.markdown("数据样例")
+        #         st.write(df.head())
+        #         # get column name list
+        #         col_list = df.columns.tolist()
+        #         # choose id column
+        #         idcol = st.selectbox("选择id字段", col_list)
+        #         # choose content column
+        #         contentcol = st.selectbox("选择内容字段", col_list)
+        #         # button for penalty amount analysis
+        #         amount_button = st.button("处罚金额分析")
+        #         if amount_button:
+        #             # get penalty amount analysis result
+        #             try:
+        #                 url = backendurl + "/amtanalysis"
+        #                 # Convert dataframe to BytesIO object (for parsing as file into FastAPI later)
+        #                 file_bytes_obj = io.BytesIO()
+        #                 df.to_csv(
+        #                     file_bytes_obj, index=False
+        #                 )  # write to BytesIO buffer
+        #                 file_bytes_obj.seek(0)  # Reset pointer to avoid EmptyDataError
+        #                 payload = {
+        #                     "idcol": idcol,
+        #                     "contentcol": contentcol,
+        #                     # "df_in": df.to_json(),
+        #                 }
+        #                 files = {"file": file_bytes_obj}
+        #                 headers = {}
+        #                 res = requests.post(
+        #                     url,
+        #                     headers=headers,
+        #                     params=payload,
+        #                     files=files,
+        #                 )
+        #                 st.success("处罚金额分析完成")
+        #                 # get result
+        #                 result = res.json()
+        #                 # convert result to dataframe
+        #                 result_df = pd.read_json(result)
+        #                 # download result
+        #                 st.download_button(
+        #                     label="下载结果",
+        #                     data=result_df.to_csv().encode("utf-8-sig"),
+        #                     file_name="amtresult.csv",
+        #                     mime="text/csv",
+        #                 )
 
-                    except Exception as e:
-                        st.error(e)
-                        st.error("处罚金额分析失败")
+        #             except Exception as e:
+        #                 st.error(e)
+        #                 st.error("处罚金额分析失败")
 
-        elif options == "文本分类":
-            # text are for text
-            article_text = st.text_area("输入文本", value="")
-            # text area for input label list
-            labeltext = st.text_area("输入标签列表", value="")
-            # radio button for choose multi label or single label
-            multi_label = st.checkbox("是否多标签", value=False, key="multi_label")
+        # elif options == "文本分类":
+        #     # text are for text
+        #     article_text = st.text_area("输入文本", value="")
+        #     # text area for input label list
+        #     labeltext = st.text_area("输入标签列表", value="")
+        #     # radio button for choose multi label or single label
+        #     multi_label = st.checkbox("是否多标签", value=False, key="multi_label")
 
-            # button for generate label text
-            classify_button = st.button("案例分类")
-            if classify_button:
-                if article_text == "" or labeltext == "":
-                    st.error("输入文本及标签列表")
-                else:
-                    # convert to list
-                    labellist = literal_eval(labeltext)
+        #     # button for generate label text
+        #     classify_button = st.button("案例分类")
+        #     if classify_button:
+        #         if article_text == "" or labeltext == "":
+        #             st.error("输入文本及标签列表")
+        #         else:
+        #             # convert to list
+        #             labellist = literal_eval(labeltext)
 
-                    try:
-                        url = backendurl + "/classify"
-                        payload = {
-                            "article": article_text,
-                            "candidate_labels": labellist,
-                            "multi_label": multi_label,
-                        }
-                        headers = {}
-                        res = requests.post(url, headers=headers, params=payload)
-                        st.success("案例分类完成")
-                        st.write(res.json())
-                    except Exception as e:
-                        st.error("案例分类失败")
-                        st.write(e)
+        #             try:
+        #                 url = backendurl + "/classify"
+        #                 payload = {
+        #                     "article": article_text,
+        #                     "candidate_labels": labellist,
+        #                     "multi_label": multi_label,
+        #                 }
+        #                 headers = {}
+        #                 res = requests.post(url, headers=headers, params=payload)
+        #                 st.success("案例分类完成")
+        #                 st.write(res.json())
+        #             except Exception as e:
+        #                 st.error("案例分类失败")
+        #                 st.write(e)
 
-        elif options == "案例批量分类":
-            # upload file button
-            upload_file = st.file_uploader("上传文件", type=["csv"])
+        # elif options == "案例批量分类":
+        #     # upload file button
+        #     upload_file = st.file_uploader("上传文件", type=["csv"])
 
-            # text area for input label list
-            labeltext = st.text_area("输入标签列表", value="")
-            # radio button for choose multi label or single label
-            multi_label = st.checkbox("是否多标签", value=False, key="multi_label")
+        #     # text area for input label list
+        #     labeltext = st.text_area("输入标签列表", value="")
+        #     # radio button for choose multi label or single label
+        #     multi_label = st.checkbox("是否多标签", value=False, key="multi_label")
 
-            # if file not null
-            if upload_file is None:
-                st.error("请上传文件")
-            else:
-                # read csv file into pandas dataframe
-                df = pd.read_csv(upload_file)
-                # data sample
-                st.markdown("数据样例")
-                st.write(df.head())
-                # get column name list
-                col_list = df.columns.tolist()
-                # choose id column
-                idcol = st.selectbox("选择id字段", col_list)
-                # choose content column
-                contentcol = st.selectbox("选择内容字段", col_list)
+        #     # if file not null
+        #     if upload_file is None:
+        #         st.error("请上传文件")
+        #     else:
+        #         # read csv file into pandas dataframe
+        #         df = pd.read_csv(upload_file)
+        #         # data sample
+        #         st.markdown("数据样例")
+        #         st.write(df.head())
+        #         # get column name list
+        #         col_list = df.columns.tolist()
+        #         # choose id column
+        #         idcol = st.selectbox("选择id字段", col_list)
+        #         # choose content column
+        #         contentcol = st.selectbox("选择内容字段", col_list)
 
-                # button for generate label text
-                classify_button = st.button("案例分类")
-                if classify_button:
-                    if labeltext == "":
-                        st.error("输入标签列表")
-                        labellist = []
-                    else:
-                        # convert to list
-                        labellist = literal_eval(labeltext)
+        #         # button for generate label text
+        #         classify_button = st.button("案例分类")
+        #         if classify_button:
+        #             if labeltext == "":
+        #                 st.error("输入标签列表")
+        #                 labellist = []
+        #             else:
+        #                 # convert to list
+        #                 labellist = literal_eval(labeltext)
 
-                    try:
-                        url = backendurl + "/batchclassify"
-                        # Convert dataframe to BytesIO object (for parsing as file into FastAPI later)
-                        file_bytes_obj = io.BytesIO()
-                        df.to_csv(
-                            file_bytes_obj, index=False
-                        )  # write to BytesIO buffer
-                        file_bytes_obj.seek(0)  # Reset pointer to avoid EmptyDataError
-                        payload = {
-                            "candidate_labels": labellist,
-                            "multi_label": multi_label,
-                            "idcol": idcol,
-                            "contentcol": contentcol,
-                            # "df_in": df.to_json(),
-                        }
-                        files = {"file": file_bytes_obj}
-                        headers = {}
-                        res = requests.post(
-                            url,
-                            headers=headers,
-                            params=payload,
-                            files={"file": file_bytes_obj},
-                        )
-                        st.success("案例分类完成")
-                        # get result
-                        result = res.json()
-                        # convert result to dataframe
-                        result_df = pd.read_json(result)
-                        # download result
-                        st.download_button(
-                            label="下载结果",
-                            data=result_df.to_csv().encode("utf-8-sig"),
-                            file_name="labelresult.csv",
-                            mime="text/csv",
-                        )
-                    except Exception as e:
-                        st.error("案例分类失败")
-                        st.write(e)
+        #             try:
+        #                 url = backendurl + "/batchclassify"
+        #                 # Convert dataframe to BytesIO object (for parsing as file into FastAPI later)
+        #                 file_bytes_obj = io.BytesIO()
+        #                 df.to_csv(
+        #                     file_bytes_obj, index=False
+        #                 )  # write to BytesIO buffer
+        #                 file_bytes_obj.seek(0)  # Reset pointer to avoid EmptyDataError
+        #                 payload = {
+        #                     "candidate_labels": labellist,
+        #                     "multi_label": multi_label,
+        #                     "idcol": idcol,
+        #                     "contentcol": contentcol,
+        #                     # "df_in": df.to_json(),
+        #                 }
+        #                 files = {"file": file_bytes_obj}
+        #                 headers = {}
+        #                 res = requests.post(
+        #                     url,
+        #                     headers=headers,
+        #                     params=payload,
+        #                     files={"file": file_bytes_obj},
+        #                 )
+        #                 st.success("案例分类完成")
+        #                 # get result
+        #                 result = res.json()
+        #                 # convert result to dataframe
+        #                 result_df = pd.read_json(result)
+        #                 # download result
+        #                 st.download_button(
+        #                     label="下载结果",
+        #                     data=result_df.to_csv().encode("utf-8-sig"),
+        #                     file_name="labelresult.csv",
+        #                     mime="text/csv",
+        #                 )
+        #             except Exception as e:
+        #                 st.error("案例分类失败")
+        #                 st.write(e)
 
-        elif options == "监管地区分析":
-            # upload file button
-            upload_file = st.file_uploader("上传文件", type=["csv"])
-            # if file not null
-            if upload_file is None:
-                st.error("请上传文件")
-            else:
-                # read csv file into pandas dataframe
-                df = pd.read_csv(upload_file)
-                # data sample
-                st.markdown("数据样例")
-                st.write(df.head())
-                # get column name list
-                col_list = df.columns.tolist()
-                # choose id column
-                idcol = st.selectbox("选择id字段", col_list)
-                # choose title column
-                titlecol = st.selectbox("选择标题字段", col_list)
-                # choose content column
-                contentcol = st.selectbox("选择内容字段", col_list)
-                # button for location analysis
-                loc_button = st.button("监管地区分析")
-                if loc_button:
-                    # get penalty amount analysis result
-                    try:
-                        url = backendurl + "/locanalysis"
-                        # Convert dataframe to BytesIO object (for parsing as file into FastAPI later)
-                        file_bytes_obj = io.BytesIO()
-                        df.to_csv(
-                            file_bytes_obj, index=False
-                        )  # write to BytesIO buffer
-                        file_bytes_obj.seek(0)  # Reset pointer to avoid EmptyDataError
-                        payload = {
-                            "idcol": idcol,
-                            "titlecol": titlecol,
-                            "contentcol": contentcol,
-                            # "df_in": df.to_json(),
-                        }
-                        files = {"file": file_bytes_obj}
-                        headers = {}
-                        res = requests.post(
-                            url,
-                            headers=headers,
-                            params=payload,
-                            files=files,
-                        )
-                        st.success("监管地区分析完成")
-                        # get result
-                        result = res.json()
-                        # convert result to dataframe
-                        result_df = pd.read_json(result)
-                        # download result
-                        st.download_button(
-                            label="下载结果",
-                            data=result_df.to_csv().encode("utf-8-sig"),
-                            file_name="locresult.csv",
-                            mime="text/csv",
-                        )
+        # elif options == "监管地区分析":
+        #     # upload file button
+        #     upload_file = st.file_uploader("上传文件", type=["csv"])
+        #     # if file not null
+        #     if upload_file is None:
+        #         st.error("请上传文件")
+        #     else:
+        #         # read csv file into pandas dataframe
+        #         df = pd.read_csv(upload_file)
+        #         # data sample
+        #         st.markdown("数据样例")
+        #         st.write(df.head())
+        #         # get column name list
+        #         col_list = df.columns.tolist()
+        #         # choose id column
+        #         idcol = st.selectbox("选择id字段", col_list)
+        #         # choose title column
+        #         titlecol = st.selectbox("选择标题字段", col_list)
+        #         # choose content column
+        #         contentcol = st.selectbox("选择内容字段", col_list)
+        #         # button for location analysis
+        #         loc_button = st.button("监管地区分析")
+        #         if loc_button:
+        #             # get penalty amount analysis result
+        #             try:
+        #                 url = backendurl + "/locanalysis"
+        #                 # Convert dataframe to BytesIO object (for parsing as file into FastAPI later)
+        #                 file_bytes_obj = io.BytesIO()
+        #                 df.to_csv(
+        #                     file_bytes_obj, index=False
+        #                 )  # write to BytesIO buffer
+        #                 file_bytes_obj.seek(0)  # Reset pointer to avoid EmptyDataError
+        #                 payload = {
+        #                     "idcol": idcol,
+        #                     "titlecol": titlecol,
+        #                     "contentcol": contentcol,
+        #                     # "df_in": df.to_json(),
+        #                 }
+        #                 files = {"file": file_bytes_obj}
+        #                 headers = {}
+        #                 res = requests.post(
+        #                     url,
+        #                     headers=headers,
+        #                     params=payload,
+        #                     files=files,
+        #                 )
+        #                 st.success("监管地区分析完成")
+        #                 # get result
+        #                 result = res.json()
+        #                 # convert result to dataframe
+        #                 result_df = pd.read_json(result)
+        #                 # download result
+        #                 st.download_button(
+        #                     label="下载结果",
+        #                     data=result_df.to_csv().encode("utf-8-sig"),
+        #                     file_name="locresult.csv",
+        #                     mime="text/csv",
+        #                 )
 
-                    except Exception as e:
-                        st.error(e)
-                        st.error("处罚金额分析失败")
+        #             except Exception as e:
+        #                 st.error(e)
+        #                 st.error("处罚金额分析失败")
 
-        elif options == "当事人分析":
-            # upload file button
-            upload_file = st.file_uploader("上传文件", type=["csv"])
-            # if file not null
-            if upload_file is None:
-                st.error("请上传文件")
-            else:
-                # read csv file into pandas dataframe
-                df = pd.read_csv(upload_file)
-                # data sample
-                st.markdown("数据样例")
-                st.write(df.head())
-                # get column name list
-                col_list = df.columns.tolist()
-                # choose id column
-                idcol = st.selectbox("选择id字段", col_list)
-                # choose content column
-                contentcol = st.selectbox("选择当事人字段", col_list)
-                # button for location analysis
-                people_button = st.button("当事人分析")
-                if people_button:
-                    # get penalty amount analysis result
-                    try:
-                        url = backendurl + "/peopleanalysis"
-                        # Convert dataframe to BytesIO object (for parsing as file into FastAPI later)
-                        file_bytes_obj = io.BytesIO()
-                        df.to_csv(
-                            file_bytes_obj, index=False
-                        )  # write to BytesIO buffer
-                        file_bytes_obj.seek(0)  # Reset pointer to avoid EmptyDataError
-                        payload = {
-                            "idcol": idcol,
-                            "contentcol": contentcol,
-                        }
-                        files = {"file": file_bytes_obj}
-                        headers = {}
-                        res = requests.post(
-                            url,
-                            headers=headers,
-                            params=payload,
-                            files=files,
-                        )
-                        st.success("当事人分析完成")
-                        # get result
-                        result = res.json()
-                        # convert result to dataframe
-                        result_df = pd.read_json(result)
-                        # download result
-                        st.download_button(
-                            label="下载结果",
-                            data=result_df.to_csv().encode("utf-8-sig"),
-                            file_name="peopleresult.csv",
-                            mime="text/csv",
-                        )
+        # elif options == "当事人分析":
+        #     # upload file button
+        #     upload_file = st.file_uploader("上传文件", type=["csv"])
+        #     # if file not null
+        #     if upload_file is None:
+        #         st.error("请上传文件")
+        #     else:
+        #         # read csv file into pandas dataframe
+        #         df = pd.read_csv(upload_file)
+        #         # data sample
+        #         st.markdown("数据样例")
+        #         st.write(df.head())
+        #         # get column name list
+        #         col_list = df.columns.tolist()
+        #         # choose id column
+        #         idcol = st.selectbox("选择id字段", col_list)
+        #         # choose content column
+        #         contentcol = st.selectbox("选择当事人字段", col_list)
+        #         # button for location analysis
+        #         people_button = st.button("当事人分析")
+        #         if people_button:
+        #             # get penalty amount analysis result
+        #             try:
+        #                 url = backendurl + "/peopleanalysis"
+        #                 # Convert dataframe to BytesIO object (for parsing as file into FastAPI later)
+        #                 file_bytes_obj = io.BytesIO()
+        #                 df.to_csv(
+        #                     file_bytes_obj, index=False
+        #                 )  # write to BytesIO buffer
+        #                 file_bytes_obj.seek(0)  # Reset pointer to avoid EmptyDataError
+        #                 payload = {
+        #                     "idcol": idcol,
+        #                     "contentcol": contentcol,
+        #                 }
+        #                 files = {"file": file_bytes_obj}
+        #                 headers = {}
+        #                 res = requests.post(
+        #                     url,
+        #                     headers=headers,
+        #                     params=payload,
+        #                     files=files,
+        #                 )
+        #                 st.success("当事人分析完成")
+        #                 # get result
+        #                 result = res.json()
+        #                 # convert result to dataframe
+        #                 result_df = pd.read_json(result)
+        #                 # download result
+        #                 st.download_button(
+        #                     label="下载结果",
+        #                     data=result_df.to_csv().encode("utf-8-sig"),
+        #                     file_name="peopleresult.csv",
+        #                     mime="text/csv",
+        #                 )
 
-                    except Exception as e:
-                        st.error(e)
-                        st.error("当事人分析失败")
+        #             except Exception as e:
+        #                 st.error(e)
+        #                 st.error("当事人分析失败")
 
-        elif options == "信息抽取":
-            # text are for text
-            article_text = st.text_area("输入文本", value="")
-            # input topic
-            topic = st.text_input("输入主题", value="")
+        # elif options == "信息抽取":
+        #     # text are for text
+        #     article_text = st.text_area("输入文本", value="")
+        #     # input topic
+        #     topic = st.text_input("输入主题", value="")
 
-            # button for information extraction
-            extract_button = st.button("信息抽取")
-            if extract_button:
-                if article_text == "" or topic == "":
-                    st.error("输入文本及主题")
-                else:
-                    try:
-                        url = backendurl + "/infoextract"
-                        payload = {
-                            "article": article_text,
-                            "topic": topic,
-                        }
-                        headers = {}
-                        res = requests.post(url, headers=headers, params=payload)
-                        st.success("信息抽取完成")
-                        st.write(res.json())
-                    except Exception as e:
-                        st.error("信息抽取失败")
-                        st.write(e)
+        #     # button for information extraction
+        #     extract_button = st.button("信息抽取")
+        #     if extract_button:
+        #         if article_text == "" or topic == "":
+        #             st.error("输入文本及主题")
+        #         else:
+        #             try:
+        #                 url = backendurl + "/infoextract"
+        #                 payload = {
+        #                     "article": article_text,
+        #                     "topic": topic,
+        #                 }
+        #                 headers = {}
+        #                 res = requests.post(url, headers=headers, params=payload)
+        #                 st.success("信息抽取完成")
+        #                 st.write(res.json())
+        #             except Exception as e:
+        #                 st.error("信息抽取失败")
+        #                 st.write(e)
 
     elif choice == "案例下载":
         download_cbircsum(org_namels)
