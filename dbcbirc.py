@@ -462,20 +462,20 @@ def display_dfmonth(df):
 
     # 图五解析：
     # get id list from searchdf
-    idlist = df_month["id"].tolist()
-    # get lawdetail
-    lawdf = get_lawcbirc()
-    # search lawdetail by selected_rows_id
-    selected_lawdetail = lawdf[lawdf["id"].isin(idlist)]
+    # idlist = df_month["id"].tolist()
+    # # get lawdetail
+    # lawdf = get_lawcbirc()
+    # # search lawdetail by selected_rows_id
+    # selected_lawdetail = lawdf[lawdf["id"].isin(idlist)]
 
-    # law type count
-    lawtype = (
-        selected_lawdetail.groupby("法律法规")["id"]
-        .nunique()
-        .reset_index(name="数量统计")
-    )
-    # sort by count
-    lawtype = lawtype.sort_values(by="数量统计", ascending=False)
+    # # law type count
+    # lawtype = (
+    #     selected_lawdetail.groupby("法律法规")["id"]
+    #     .nunique()
+    #     .reset_index(name="数量统计")
+    # )
+    # # sort by count
+    # lawtype = lawtype.sort_values(by="数量统计", ascending=False)
     # x_data3 = lawtype["法律法规"].tolist()
     # y_data3 = lawtype["数量统计"].tolist()
     # bar3, lawtype_selected = print_bar(
@@ -483,56 +483,56 @@ def display_dfmonth(df):
     # )
 
     # 图五解析开始
-    lawtype_count = lawtype[["法律法规", "数量统计"]]  # 把法律法规的数量进行统计
-    # pandas数据排序
-    lawtype_count = lawtype_count.sort_values("数量统计", ascending=False)
-    result5a = ""
-    for i in range(5):
-        try:
-            result5a = (
-                result5a
-                + str(lawtype_count.iloc[i, 0])
-                + "("
-                + str(lawtype_count.iloc[i, 1])
-                + "起),"
-            )
-        except Exception as e:
-            print(e)
-            break
-    # st.markdown(
-    #     "##### 图五解析:法律法规统计-不同法规维度：处罚事件中，各违规类型中处罚数量排名前五分别为:"
-    #     + result5[: len(result5) - 1]
+    # lawtype_count = lawtype[["法律法规", "数量统计"]]  # 把法律法规的数量进行统计
+    # # pandas数据排序
+    # lawtype_count = lawtype_count.sort_values("数量统计", ascending=False)
+    # result5a = ""
+    # for i in range(5):
+    #     try:
+    #         result5a = (
+    #             result5a
+    #             + str(lawtype_count.iloc[i, 0])
+    #             + "("
+    #             + str(lawtype_count.iloc[i, 1])
+    #             + "起),"
+    #         )
+    #     except Exception as e:
+    #         print(e)
+    #         break
+    # # st.markdown(
+    # #     "##### 图五解析:法律法规统计-不同法规维度：处罚事件中，各违规类型中处罚数量排名前五分别为:"
+    # #     + result5[: len(result5) - 1]
+    # # )
+    # # by具体条文
+    # # lawdf["数量统计"] = ""
+    # new_lawtype = (
+    #     selected_lawdetail.groupby(["法律法规", "条文"])["id"]
+    #     .nunique()
+    #     .reset_index(name="数量统计")
     # )
-    # by具体条文
-    # lawdf["数量统计"] = ""
-    new_lawtype = (
-        selected_lawdetail.groupby(["法律法规", "条文"])["id"]
-        .nunique()
-        .reset_index(name="数量统计")
-    )
-    # new_lawtype=lawdf.groupby(['法律法规','条文'])#%%%
-    new_lawtype["法律法规明细"] = (
-        new_lawtype["法律法规"] + "(" + new_lawtype["条文"] + ")"
-    )
+    # # new_lawtype=lawdf.groupby(['法律法规','条文'])#%%%
+    # new_lawtype["法律法规明细"] = (
+    #     new_lawtype["法律法规"] + "(" + new_lawtype["条文"] + ")"
+    # )
 
-    lawtype_count = new_lawtype[
-        ["法律法规明细", "数量统计"]
-    ]  # 把法律法规的数量进行统计
-    # pandas数据排序
-    lawtype_count = lawtype_count.sort_values("数量统计", ascending=False)
-    result5b = ""
-    for i in range(5):
-        try:
-            result5b = (
-                result5b
-                + str(lawtype_count.iloc[i, 0])
-                + "("
-                + str(lawtype_count.iloc[i, 1])
-                + "起),"
-            )
-        except Exception as e:
-            print(e)
-            break
+    # lawtype_count = new_lawtype[
+    #     ["法律法规明细", "数量统计"]
+    # ]  # 把法律法规的数量进行统计
+    # # pandas数据排序
+    # lawtype_count = lawtype_count.sort_values("数量统计", ascending=False)
+    # result5b = ""
+    # for i in range(5):
+    #     try:
+    #         result5b = (
+    #             result5b
+    #             + str(lawtype_count.iloc[i, 0])
+    #             + "("
+    #             + str(lawtype_count.iloc[i, 1])
+    #             + "起),"
+    #         )
+    #     except Exception as e:
+    #         print(e)
+    #         break
     # image5_text = (
     #     " 图五解析:法律法规统计-不同法规维度：处罚事件中，各违规类型中处罚数量排名前五分别为:"
     #     + result5a[: len(result5a) - 1]
@@ -721,21 +721,21 @@ def display_eventdetail(search_df):
     #     )
 
     # get lawdetail
-    lawdf = get_lawcbirc()
-    # search lawdetail by selected_rows_id
-    selected_rows_lawdetail = lawdf[lawdf["id"] == id]
+    # lawdf = get_lawcbirc()
+    # # search lawdetail by selected_rows_id
+    # selected_rows_lawdetail = lawdf[lawdf["id"] == id]
 
-    if len(selected_rows_lawdetail) > 0:
-        # display lawdetail
-        st.markdown("##### 处罚依据")
-        lawdata = selected_rows_lawdetail[["法律法规", "条文"]]
-        # display lawdata
-        for i in range(len(lawdata)):
-            st.markdown(
-                str(i + 1) + ": " + lawdata.iloc[i, 0] + " " + lawdata.iloc[i, 1]
-            )
+    # if len(selected_rows_lawdetail) > 0:
+    #     # display lawdetail
+    #     st.markdown("##### 处罚依据")
+    #     lawdata = selected_rows_lawdetail[["法律法规", "条文"]]
+    #     # display lawdata
+    #     for i in range(len(lawdata)):
+    #         st.markdown(
+    #             str(i + 1) + ": " + lawdata.iloc[i, 0] + " " + lawdata.iloc[i, 1]
+    #         )
 
-        # lawdtl = df2aggrid(lawdata)
+    # lawdtl = df2aggrid(lawdata)
     #     selected_law = lawdtl["selected_rows"]
     #     if selected_law == []:
     #         st.error("请先选择查看监管条文")
@@ -1002,35 +1002,35 @@ def print_bar(x_data, y_data, y_axis_name, title):
 
 
 # update the analysis data
-def update_cbircanalysis(orgname):
-    org_name_index = org2name[orgname]
-    # get cbirc detail
-    newdf = get_cbircdetail(orgname)
-    # get id list
-    newidls = newdf["id"].tolist()
-    # get cbirc analysis details
-    olddf = get_cbircanalysis(orgname)
-    # if olddf is not empty
-    if olddf.empty:
-        oldidls = []
-    else:
-        oldidls = olddf["id"].tolist()
-    # get new idls not in oldidls
-    updidls = [x for x in newidls if x not in oldidls]
+# def update_cbircanalysis(orgname):
+#     org_name_index = org2name[orgname]
+#     # get cbirc detail
+#     newdf = get_cbircdetail(orgname)
+#     # get id list
+#     newidls = newdf["id"].tolist()
+#     # get cbirc analysis details
+#     olddf = get_cbircanalysis(orgname)
+#     # if olddf is not empty
+#     if olddf.empty:
+#         oldidls = []
+#     else:
+#         oldidls = olddf["id"].tolist()
+#     # get new idls not in oldidls
+#     updidls = [x for x in newidls if x not in oldidls]
 
-    upddf = newdf[newdf["id"].isin(updidls)]
-    # if newdf is not empty, save it
-    if upddf.empty is False:
-        splitdf = split_eventdoc(upddf)
-        updlen = len(splitdf)
-        st.info("拆分了" + str(updlen) + "条数据")
-        # combine with olddf
-        # upddf1 = pd.concat([splitdf, olddf])
-        upddf1 = splitdf
-        # # reset index
-        upddf1.reset_index(drop=True, inplace=True)
-        savename = "cbircanalysis" + org_name_index + get_now()
-        savedf(upddf1, savename)
+#     upddf = newdf[newdf["id"].isin(updidls)]
+#     # if newdf is not empty, save it
+#     if upddf.empty is False:
+#         splitdf = split_eventdoc(upddf)
+#         updlen = len(splitdf)
+#         st.info("拆分了" + str(updlen) + "条数据")
+#         # combine with olddf
+#         # upddf1 = pd.concat([splitdf, olddf])
+#         upddf1 = splitdf
+#         # # reset index
+#         upddf1.reset_index(drop=True, inplace=True)
+#         savename = "cbircanalysis" + org_name_index + get_now()
+#         savedf(upddf1, savename)
 
 
 # extract df by regex pattern matching
@@ -1044,128 +1044,128 @@ def extract_info(d1, pat):
 
 
 # split info from eventdf
-def split_eventdoc(d1):
-    # clean up
-    d1["doc1"] = d1["内容"].str.replace(r"\r|\n|\t|\xa0|\u3000|\s|\xa0", "")
-    # pat1 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
-    # r1, d2 = extract_info(d1, pat1)
-    # pat2 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出行政处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
-    # r2, d3 = extract_info(d2, pat2)
-    # pat3 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出行政处罚决定的机关名称(.*)作出行政处罚决定的日期(.*)"
-    # r3, d4 = extract_info(d3, pat3)
-    # pat4 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实(.*)行政处罚依据(.*)行政处罚决定(.*)作出处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
-    # r4, d5 = extract_info(d4, pat4)
-    # pat5 = r"处罚决定书文号(.*)被处罚当事人(.*)主要违法事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出行政处罚的机关名称(.*)作出处罚决定的日期(.*)"
-    # r5, d6 = extract_info(d5, pat5)
-    # pat6 = (
-    #     r"行政处罚决定书文号(.*)被处罚当事人(.*)案由(.*)行政处罚依据(.*)行政处罚决定(.*)作出处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
-    # )
-    # r6, d7 = extract_info(d6, pat6)
+# def split_eventdoc(d1):
+#     # clean up
+#     d1["doc1"] = d1["内容"].str.replace(r"\r|\n|\t|\xa0|\u3000|\s|\xa0", "")
+#     # pat1 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
+#     # r1, d2 = extract_info(d1, pat1)
+#     # pat2 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出行政处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
+#     # r2, d3 = extract_info(d2, pat2)
+#     # pat3 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出行政处罚决定的机关名称(.*)作出行政处罚决定的日期(.*)"
+#     # r3, d4 = extract_info(d3, pat3)
+#     # pat4 = r"行政处罚决定书文号(.*)被处罚当事人(.*)主要违法违规事实(.*)行政处罚依据(.*)行政处罚决定(.*)作出处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
+#     # r4, d5 = extract_info(d4, pat4)
+#     # pat5 = r"处罚决定书文号(.*)被处罚当事人(.*)主要违法事实（案由）(.*)行政处罚依据(.*)行政处罚决定(.*)作出行政处罚的机关名称(.*)作出处罚决定的日期(.*)"
+#     # r5, d6 = extract_info(d5, pat5)
+#     # pat6 = (
+#     #     r"行政处罚决定书文号(.*)被处罚当事人(.*)案由(.*)行政处罚依据(.*)行政处罚决定(.*)作出处罚决定的机关名称(.*)作出处罚决定的日期(.*)"
+#     # )
+#     # r6, d7 = extract_info(d6, pat6)
 
-    pat6 = r"(?:(?:行政处罚决定书文号|处罚决定书文号|行政处罚决定书文号|行政处罚决定文书号|行政处罚决定书号|行政处罚文书号|行政处罚决定文号)(.*?))(?:被处罚当事人|被处罚人|被处罚单位|单位名称|被处罚机构情况|被处罚个人)(.*?)(?:主要违法违规事实（案由）|主要违法违规事实|主要违法事实（案由）|案由|主要违法事实)(.*)行政处罚依据(.*)(?:行政处罚决定|行政处罚种类及金额|行政处理决定|行政处罚种类)(.*)(?:作出处罚决定的机关名称|作出行政处罚的机关名称|作出行政处罚决定的机关名称|做出处罚决定的机关名称|作出处罚的机关|作出处罚决定机关名称)(.*?)(?:(?:作出处罚决定的日期|作出行政处罚决定的日期|做出处罚决定的日期|出行政处罚决定的日期|作出处罚的日期)(.*))?$"
-    r6, d7 = extract_info(d1, pat6)
+#     pat6 = r"(?:(?:行政处罚决定书文号|处罚决定书文号|行政处罚决定书文号|行政处罚决定文书号|行政处罚决定书号|行政处罚文书号|行政处罚决定文号)(.*?))(?:被处罚当事人|被处罚人|被处罚单位|单位名称|被处罚机构情况|被处罚个人)(.*?)(?:主要违法违规事实（案由）|主要违法违规事实|主要违法事实（案由）|案由|主要违法事实)(.*)行政处罚依据(.*)(?:行政处罚决定|行政处罚种类及金额|行政处理决定|行政处罚种类)(.*)(?:作出处罚决定的机关名称|作出行政处罚的机关名称|作出行政处罚决定的机关名称|做出处罚决定的机关名称|作出处罚的机关|作出处罚决定机关名称)(.*?)(?:(?:作出处罚决定的日期|作出行政处罚决定的日期|做出处罚决定的日期|出行政处罚决定的日期|作出处罚的日期)(.*))?$"
+#     r6, d7 = extract_info(d1, pat6)
 
-    pat7 = r"([^，,：、]+罚[^，,：、]*?号.?)((?:被处罚|当事人|受处罚|姓名|名称|单位).*?)((?:现场检查|经检查|根据举报|。|经抽查|我|你|近期|一、|一、违法|一、经查|我局对|依据《|根据《|经查|我局自|我局于|我局在|依据有关法律|\d{4}年\d?\d月\d?\d日起|\d{4}年\d?\d月\d?\d日至|\d{4}年).*?。)((?:依据原《|上述|你公司|你作为|上述事实|综上|我局认为|上述未|上述行为|上述违法|根据|依据《|以上行为|该公司上述).*。)(.*?)((?:\d\d\d\d|.{4})年[^，,、]*日)"
-    r7, d8 = extract_info(d7, pat7)
-    pat8 = r"((?:被处罚|当事人：|受处罚|姓名).*?)((?:。|我|你|近期|一、违法|一、经查|我局对|依据《|根据《|经查|我局自|我局于|我局在|依据有关法律|\d{4}年\d?\d月\d?\d日起|\d{4}年\d?\d月\d?\d日至|\d{4}年\d?\d月\d?\d日).*?。)((?:你公司|你作为|上述事实|综上|我局认为|上述未|上述行为|上述违法|根据|依据《|以上行为|该公司上述).*。)(.*?)((?:\d\d\d\d|.{4})年[^，,、]*日)"
-    r8, d9 = extract_info(d8, pat8)
-    pat9 = r"(.*?)((?:我分局|我会|本会|经查|你公司|依据).*?。)([^。]*?(?:依据|我局|根据).*。)(中国[^。]*)(.{4}年.*)"
-    r9, d10 = extract_info(d9, pat9)
+#     pat7 = r"([^，,：、]+罚[^，,：、]*?号.?)((?:被处罚|当事人|受处罚|姓名|名称|单位).*?)((?:现场检查|经检查|根据举报|。|经抽查|我|你|近期|一、|一、违法|一、经查|我局对|依据《|根据《|经查|我局自|我局于|我局在|依据有关法律|\d{4}年\d?\d月\d?\d日起|\d{4}年\d?\d月\d?\d日至|\d{4}年).*?。)((?:依据原《|上述|你公司|你作为|上述事实|综上|我局认为|上述未|上述行为|上述违法|根据|依据《|以上行为|该公司上述).*。)(.*?)((?:\d\d\d\d|.{4})年[^，,、]*日)"
+#     r7, d8 = extract_info(d7, pat7)
+#     pat8 = r"((?:被处罚|当事人：|受处罚|姓名).*?)((?:。|我|你|近期|一、违法|一、经查|我局对|依据《|根据《|经查|我局自|我局于|我局在|依据有关法律|\d{4}年\d?\d月\d?\d日起|\d{4}年\d?\d月\d?\d日至|\d{4}年\d?\d月\d?\d日).*?。)((?:你公司|你作为|上述事实|综上|我局认为|上述未|上述行为|上述违法|根据|依据《|以上行为|该公司上述).*。)(.*?)((?:\d\d\d\d|.{4})年[^，,、]*日)"
+#     r8, d9 = extract_info(d8, pat8)
+#     pat9 = r"(.*?)((?:我分局|我会|本会|经查|你公司|依据).*?。)([^。]*?(?:依据|我局|根据).*。)(中国[^。]*)(.{4}年.*)"
+#     r9, d10 = extract_info(d9, pat9)
 
-    comdf = r6
-    [["标题", "文号", "发布日期", "doc1", "id", 0, 1, 2, 3, 4, 5, 6]]
-    comdfcols = [
-        "标题",
-        "文号",
-        "发布日期",
-        "doc1",
-        "id",
-        "行政处罚决定书文号",
-        "被处罚当事人",
-        "主要违法违规事实",
-        "行政处罚依据",
-        "行政处罚决定",
-        "作出处罚决定的机关名称",
-        "作出处罚决定的日期",
-    ]
-    comdf.columns = comdfcols
-    # st.write(comdf)
+#     comdf = r6
+#     [["标题", "文号", "发布日期", "doc1", "id", 0, 1, 2, 3, 4, 5, 6]]
+#     comdfcols = [
+#         "标题",
+#         "文号",
+#         "发布日期",
+#         "doc1",
+#         "id",
+#         "行政处罚决定书文号",
+#         "被处罚当事人",
+#         "主要违法违规事实",
+#         "行政处罚依据",
+#         "行政处罚决定",
+#         "作出处罚决定的机关名称",
+#         "作出处罚决定的日期",
+#     ]
+#     comdf.columns = comdfcols
+#     # st.write(comdf)
 
-    r7 = generate_lawls(r7)
-    # convert column list to string
-    r7["lawls"] = r7["lawls"].apply(lambda x: "，".join(x))
-    r7.columns = [
-        "标题",
-        "文号",
-        "发布日期",
-        "doc1",
-        "id",
-        "行政处罚决定书文号",
-        "被处罚当事人",
-        "主要违法违规事实",
-        "行政处罚决定",
-        "作出处罚决定的机关名称",
-        "作出处罚决定的日期",
-        "行政处罚依据",
-    ]
-    # st.write(r7)
+#     r7 = generate_lawls(r7)
+#     # convert column list to string
+#     r7["lawls"] = r7["lawls"].apply(lambda x: "，".join(x))
+#     r7.columns = [
+#         "标题",
+#         "文号",
+#         "发布日期",
+#         "doc1",
+#         "id",
+#         "行政处罚决定书文号",
+#         "被处罚当事人",
+#         "主要违法违规事实",
+#         "行政处罚决定",
+#         "作出处罚决定的机关名称",
+#         "作出处罚决定的日期",
+#         "行政处罚依据",
+#     ]
+#     # st.write(r7)
 
-    r8 = generate_lawls(r8)
-    # convert column list to string
-    r8["lawls"] = r8["lawls"].apply(lambda x: "，".join(x))
-    r8.columns = [
-        "标题",
-        "文号",
-        "发布日期",
-        "doc1",
-        "id",
-        "被处罚当事人",
-        "主要违法违规事实",
-        "行政处罚决定",
-        "作出处罚决定的机关名称",
-        "作出处罚决定的日期",
-        "行政处罚依据",
-    ]
-    # st.write(r8)
+#     r8 = generate_lawls(r8)
+#     # convert column list to string
+#     r8["lawls"] = r8["lawls"].apply(lambda x: "，".join(x))
+#     r8.columns = [
+#         "标题",
+#         "文号",
+#         "发布日期",
+#         "doc1",
+#         "id",
+#         "被处罚当事人",
+#         "主要违法违规事实",
+#         "行政处罚决定",
+#         "作出处罚决定的机关名称",
+#         "作出处罚决定的日期",
+#         "行政处罚依据",
+#     ]
+#     # st.write(r8)
 
-    r9 = generate_lawls(r9)
-    # convert column list to string
-    r9["lawls"] = r9["lawls"].apply(lambda x: "，".join(x))
-    r9.columns = [
-        "标题",
-        "文号",
-        "发布日期",
-        "doc1",
-        "id",
-        "被处罚当事人",
-        "主要违法违规事实",
-        "行政处罚决定",
-        "作出处罚决定的机关名称",
-        "作出处罚决定的日期",
-        "行政处罚依据",
-    ]
-    # st.write(r9)
-    st.markdown("### 拆分失败的数量: " + str(len(d10)))
-    r10 = d10[["标题", "文号", "发布日期", "doc1", "id"]]
-    r10 = generate_lawls(r10)
-    # convert column list to string if item is list
+#     r9 = generate_lawls(r9)
+#     # convert column list to string
+#     r9["lawls"] = r9["lawls"].apply(lambda x: "，".join(x))
+#     r9.columns = [
+#         "标题",
+#         "文号",
+#         "发布日期",
+#         "doc1",
+#         "id",
+#         "被处罚当事人",
+#         "主要违法违规事实",
+#         "行政处罚决定",
+#         "作出处罚决定的机关名称",
+#         "作出处罚决定的日期",
+#         "行政处罚依据",
+#     ]
+#     # st.write(r9)
+#     st.markdown("### 拆分失败的数量: " + str(len(d10)))
+#     r10 = d10[["标题", "文号", "发布日期", "doc1", "id"]]
+#     r10 = generate_lawls(r10)
+#     # convert column list to string if item is list
 
-    r10["lawls"] = r10["lawls"].apply(
-        lambda x: "，".join(x) if isinstance(x, list) else x
-    )
-    r10.columns = [
-        "标题",
-        "文号",
-        "发布日期",
-        "doc1",
-        "id",
-        "行政处罚依据",
-    ]
-    r10["主要违法违规事实"] = r10["doc1"]
-    # st.write(r10)
-    # combine all df
-    alldf = pd.concat([comdf, r7, r8, r9, r10])
-    return alldf
+#     r10["lawls"] = r10["lawls"].apply(
+#         lambda x: "，".join(x) if isinstance(x, list) else x
+#     )
+#     r10.columns = [
+#         "标题",
+#         "文号",
+#         "发布日期",
+#         "doc1",
+#         "id",
+#         "行政处罚依据",
+#     ]
+#     r10["主要违法违规事实"] = r10["doc1"]
+#     # st.write(r10)
+#     # combine all df
+#     alldf = pd.concat([comdf, r7, r8, r9, r10])
+#     return alldf
 
 
 def generate_lawls(d1):
@@ -1245,128 +1245,58 @@ def download_cbircsum(org_namels):
         idls = dtl["id"].unique()
         st.write("id数量: " + str(len(idls)))
 
-        # get analysis data
-        # beginwith = "cbircanalysis" + org_name_index
-        beginwith = "cbircsplit" + org_name_index
-        analysis = get_csvdf(pencbirc, beginwith)
-        lenanalysis = len(analysis)
-        st.write("拆分数据量: " + str(lenanalysis))
-        # get unique id number
-        idls = analysis["id"].unique()
-        st.write("id数量: " + str(len(idls)))
-
+        # drop duplicates
+        oldsum.drop_duplicates("docId", inplace=True)
         # listname
         listname = "cbircsum" + org_name_index + get_nowdate() + ".csv"
         # download list data
         st.download_button(
             "下载列表数据", data=oldsum.to_csv().encode("utf_8_sig"), file_name=listname
         )
+
+        # drop duplicates
+        dtl.drop_duplicates("id", inplace=True)
         # detailname
         detailname = "cbircdtl" + org_name_index + get_nowdate() + ".csv"
         # download detail data
         st.download_button(
             "下载详情数据", data=dtl.to_csv().encode("utf_8_sig"), file_name=detailname
         )
-        # analysisname
-        analysisname = "cbircanalysis" + org_name_index + get_nowdate() + ".csv"
-
-        analysisdown = analysis  # [['id', '行政处罚决定书文号', '被处罚当事人', '主要违法违规事实', '行政处罚依据', '行政处罚决定', '作出处罚决定的机关名称', '作出处罚决定的日期']]
-        # analysisdown = analysis[
-        #     [
-        #         "id",
-        #         "行政处罚决定书文号",
-        #         "被处罚当事人",
-        #         "主要违法违规事实",
-        #         "行政处罚依据",
-        #         "行政处罚决定",
-        #         "作出处罚决定的机关名称",
-        #         "作出处罚决定的日期",
-        #     ]
-        # ]
-        # analysisdown.columns = [
-        #     "id",
-        #     "wenhao",
-        #     "people",
-        #     "event",
-        #     "law",
-        #     "penalty",
-        #     "org",
-        #     "date",
-        # ]
-
-        # download analysis data
-        st.download_button(
-            "下载拆分数据",
-            data=analysisdown.to_csv().encode("utf_8_sig"),
-            file_name=analysisname,
-        )
 
     st.markdown("#### 分类数据下载")
 
-    # download amt data
-    # amtdf = get_cbircamt()
-    amtdf = get_csvdf(pencbirc, "cbircamt")
-    lenamt = len(amtdf)
-    st.write("共有" + str(lenamt) + "条金额数据")
-    amtname = "cbircamt" + get_nowdate() + ".csv"
+    # get analysis data
+    # beginwith = "cbircanalysis" + org_name_index
+    beginwith = "cbircsplit"
+    analysis = get_csvdf(pencbirc, beginwith)
+    lenanalysis = len(analysis)
+    st.write("拆分数据量: " + str(lenanalysis))
+    # get unique id number
+    idls = analysis["id"].unique()
+    st.write("id数量: " + str(len(idls)))
+
+    analysisname = "cbircsplit" + get_nowdate() + ".csv"
+    # drop duplicates
+    analysis.drop_duplicates("id", inplace=True)
+    # download analysis data
     st.download_button(
-        "下载金额数据", data=amtdf.to_csv().encode("utf_8_sig"), file_name=amtname
-    )
-    # download law data
-    lawdf = get_lawcbirc()
-    lenlaw = len(lawdf["id"].unique())
-    st.write("共有" + str(lenlaw) + "条法律数据")
-    lawname = "cbirclaw" + get_nowdate() + ".csv"
-    st.download_button(
-        "下载法律数据", data=lawdf.to_csv().encode("utf_8_sig"), file_name=lawname
-    )
-    # download location data
-    locdf = get_cbircloc()
-    lenloc = len(locdf)
-    st.write("共有" + str(lenloc) + "条地点数据")
-    locname = "cbircloc" + get_nowdate() + ".csv"
-    st.download_button(
-        "下载地点数据", data=locdf.to_csv().encode("utf_8_sig"), file_name=locname
-    )
-    # download litigant data
-    litdf = get_cbirclitigant()
-    lenlit = len(litdf["id"].unique())
-    st.write("共有" + str(lenlit) + "条当事人数据")
-    litname = "cbirclitigant" + get_nowdate() + ".csv"
-    st.download_button(
-        "下载当事人数据", data=litdf.to_csv().encode("utf_8_sig"), file_name=litname
+        "下载拆分数据",
+        data=analysis.to_csv().encode("utf_8_sig"),
+        file_name=analysisname,
     )
 
-    # download label data
-    labeldf = get_cbirclabel()
-    lenlabel = len(labeldf["id"].unique())
-    st.write("共有" + str(lenlabel) + "条标签数据")
-    labelname = "cbirclabel" + get_nowdate() + ".csv"
-    st.download_button(
-        "下载标签数据", data=labeldf.to_csv().encode("utf_8_sig"), file_name=labelname
-    )
-
-    # concat all data by id
-    # alldf = pd.merge(lawdf, amtdf, on="id", how="left")
-    # alldf = pd.merge(alldf, locdf, on="id", how="left")
-    # alldf = pd.merge(alldf, litdf, on="id", how="left")
-    # alldf = pd.merge(alldf, labeldf, on="id", how="left")
-
-    alldf = get_csvdf(pencbirc, "cbirccat")
-    lenall = len(alldf["id"].unique())
-    st.write("共有" + str(lenall) + "条分类数据")
-    # # st.write(alldf)
-
-    # downloaddf = alldf[['id', '处理依据', 'province',  'amount', 'label']]
-    # downloaddf.columns = ['id', 'law', 'province', 'amount', 'industry']
-    # # add blank summary and category columns
-    # downloaddf["summary"] = ""
-    # downloaddf["category"] = ""
-    # st.write(downloaddf)
+    catdf = get_csvdf(pencbirc, "cbirccat")
+    lencat = len(catdf)
+    st.write("分类数据量: " + str(lencat))
+    # get unique id number
+    idls = catdf["id"].unique()
+    st.write("id数量: " + str(len(idls)))
 
     allname = "cbirccat" + get_nowdate() + ".csv"
+    # drop duplicates
+    catdf.drop_duplicates("id", inplace=True)
     st.download_button(
-        "下载分类数据", data=alldf.to_csv().encode("utf_8_sig"), file_name=allname
+        "下载分类数据", data=catdf.to_csv().encode("utf_8_sig"), file_name=allname
     )
 
 
@@ -1614,18 +1544,12 @@ def update_cbirclabel():
     newdf = get_cbircdetail("")
     # get id list
     newidls = newdf["id"].tolist()
-    # get cbirc analysis
-    # anadf = get_cbircanalysis("")
-    # get id list
-    # anaidls = anadf["id"].tolist()
+
     # get amount details
     amtdf = get_cbirccat()
-    # get labeldf
-    # labeldf = get_cbirclabel()
-    # get locdf
-    # locdf = get_cbircloc()
-    # get litigantdf
-    # litigantdf = get_cbirclitigant()
+
+    # get splitdf
+    splitdf = get_cbircanalysis("")
 
     # if amtdf is not empty
     if amtdf.empty:
@@ -1635,30 +1559,6 @@ def update_cbirclabel():
     # get new idls not in oldidls
     amtupdidls = [x for x in newidls if x not in amtoldidls]
 
-    # if labeldf is not empty
-    # if labeldf.empty:
-    #     labeloldidls = []
-    # else:
-    #     labeloldidls = labeldf["id"].tolist()
-    # # get new idls not in oldidls
-    # labelupdidls = [x for x in anaidls if x not in labeloldidls]
-
-    # if locdf is not empty
-    # if locdf.empty:
-    #     locoldidls = []
-    # else:
-    #     locoldidls = locdf["id"].tolist()
-    # # get new idls not in oldidls
-    # locupdidls = [x for x in anaidls if x not in locoldidls]
-
-    # if litigantdf is not empty
-    # if litigantdf.empty:
-    #     litigantoldidls = []
-    # else:
-    #     litigantoldidls = litigantdf["id"].tolist()
-    # # get new idls not in oldidls
-    # litigantupdidls = [x for x in anaidls if x not in litigantoldidls]
-
     amtupddf = newdf[newdf["id"].isin(amtupdidls)]
     # if newdf is not empty, save it
     if amtupddf.empty is False:
@@ -1667,8 +1567,28 @@ def update_cbirclabel():
         savename = "cbirc_tocat" + get_nowdate() + ".csv"
         # download detail data
         st.download_button(
-            "下载案例数据",
+            "下载分类案例数据",
             data=amtupddf.to_csv().encode("utf_8_sig"),
+            file_name=savename,
+        )
+
+    if splitdf.empty:
+        splitoldidls = []
+    else:
+        splitoldidls = splitdf["id"].tolist()
+
+    splitupdidls = [x for x in newidls if x not in splitoldidls]
+
+    splitupddf = newdf[newdf["id"].isin(splitupdidls)]
+    # if newdf is not empty, save it
+    if splitupddf.empty is False:
+        updlen = len(splitupddf)
+        st.info("待更新拆分" + str(updlen) + "条数据")
+        savename = "cbirc_tosplit" + get_nowdate() + ".csv"
+        # download detail data
+        st.download_button(
+            "下载拆分案例数据",
+            data=splitupddf.to_csv().encode("utf_8_sig"),
             file_name=savename,
         )
 
