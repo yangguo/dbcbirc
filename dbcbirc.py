@@ -621,6 +621,8 @@ def display_dfmonth(df):
     df_month_loc = df_month
     # count by province
     df_org_count = df_month_loc.groupby(["province"]).size().reset_index(name="count")
+    # sort by count
+    df_org_count = df_org_count.sort_values(by="count", ascending=False)
     org_ls = df_org_count["province"].tolist()
     count_ls = df_org_count["count"].tolist()
 
