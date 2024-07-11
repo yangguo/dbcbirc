@@ -24,7 +24,7 @@ def send_input_to_api(api_key, input_text):
         response.raise_for_status()
 
 
-def process_df(df, api_key):
+def process_df(df, api_key, api_key2):
     results = []
 
     for index, row in df.iterrows():
@@ -32,19 +32,22 @@ def process_df(df, api_key):
         id = row["id"]
         print("id: " + str(id))
         input_text = row["内容"]
-        print("input: " + input_text)
+        print("input: " + str(input_text))
 
         try:
             output = send_input_to_api(api_key, input_text)
             print("output: " + str(output))
             output["id"] = id
             results.append(output)
-        except requests.exceptions.HTTPError as e:
-            print(f"HTTP error occurred: {e}")
-        except requests.exceptions.RequestException as e:
-            print(f"Request exception occurred: {e}")
         except Exception as e:
             print(f"An error occurred: {e}")
+            try:
+                output = send_input_to_api(api_key2, input_text)
+                print("output (secondary key): " + str(output))
+                output["id"] = id
+                results.append(output)
+            except Exception as e2:
+                print(f"Failed with both keys: {e2}")
 
         if (index + 1) % 2 == 0:
             print("savefile: " + str(index))
@@ -58,10 +61,11 @@ def process_df(df, api_key):
 if __name__ == "__main__":
     # api_key = "your_api_key"
     api_key = "app-"  # toamt
+    api_key2 = "app-"  # toamt
 
     df = pd.read_csv("~/Downloads/cbirc_toamt20240629.csv")
     df2 = df[["id", "内容"]]
 
-    results = process_df(df2, api_key)
+    results = process_df(df2, api_key, api_key2)
     results_df = pd.DataFrame(results)
     results_df.to_csv("cbirc_toamt20240629_output.csv")

@@ -24,7 +24,7 @@ import plotly.express as px
 import snapshot as driver
 from database import delete_data, get_collection, get_data, insert_data
 from utils import split_words
-
+from collections import Counter
 # from streamlit_tags import st_tags
 
 
@@ -40,6 +40,200 @@ org2name = {
     "银保监局本级": "benji",
     "银保监分局本级": "fenju",
     "": "",
+}
+
+city2province = {
+    "山东省": "山东省",
+    "山西省": "山西省",
+    "河南省": "河南省",
+    "江西省": "江西省",
+    "上海市": "上海市",
+    "上海": "上海市",
+    "宁夏回族自治区": "宁夏回族自治区",
+    "湖北省": "湖北省",
+    "广西壮族自治区": "广西壮族自治区",
+    "海南省": "海南省",
+    "陕西省": "陕西省",
+    "北京": "北京市",
+    "深圳": "广东省",
+    "浙江省": "浙江省",
+    "四川省": "四川省",
+    "云南省": "云南省",
+    "内蒙古自治区": "内蒙古自治区",
+    "安徽省": "安徽省",
+    "黑龙江省": "黑龙江省",
+    "福建省": "福建省",
+    "辽宁省": "辽宁省",
+    "广东省": "广东省",
+    "重庆市": "重庆市",
+    "吉林省": "吉林省",
+    "江苏省": "江苏省",
+    "青岛市": "山东省",
+    "湖南省": "湖南省",
+    "西藏自治区": "西藏自治区",
+    "大连": "辽宁省",
+    "贵州省": "贵州省",
+    "天津市": "天津市",
+    "全国": "未知省份",
+    "无": "未知省份",
+    "湖南省湘潭市": "湖南省",
+    "贵州省遵义市": "贵州省",
+    "河北省": "河北省",
+    "山东省菏泽市": "山东省",
+    "新疆维吾尔自治区": "新疆维吾尔自治区",
+    "青海省": "青海省",
+    "内蒙古自治区包头市": "内蒙古自治区",
+    "江苏省淮安市": "江苏省",
+    "商洛市": "陕西省",
+    "甘肃省": "甘肃省",
+    "新疆维吾尔自治区哈密市": "新疆维吾尔自治区",
+    "重庆": "重庆市",
+    "汉中": "陕西省",
+    "江西省萍乡市": "江西省",
+    "新疆石河子": "新疆维吾尔自治区",
+    "江苏省盐城市": "江苏省",
+    "辽宁省锦州市": "辽宁省",
+    "湖南省益阳市": "湖南省",
+    "新疆维吾尔自治区和田地区": "新疆维吾尔自治区",
+    "四川省绵阳市": "四川省",
+    "山东省威海市": "山东省",
+    "葫芦岛市": "辽宁省",
+    "河南省开封市": "河南省",
+    "辽宁省葫芦岛市": "辽宁省",
+    "广东省揭阳市": "广东省",
+    "新疆维吾尔自治区吐鲁番市": "新疆维吾尔自治区",
+    "本溪市": "辽宁省",
+    "广东省佛山市": "广东省",
+    "晋城市": "山西省",
+    "新疆和田": "新疆维吾尔自治区",
+    "安徽省淮南市": "安徽省",
+    "安徽省宣城市": "安徽省",
+    "宣城市": "安徽省",
+    "江西省抚州市": "江西省",
+    "黑龙江省大庆市": "黑龙江省",
+    "广西壮族自治区来宾市": "广西壮族自治区",
+    "四川省达州市": "四川省",
+    "喀什": "新疆维吾尔自治区",
+    "海西": "青海省",
+    "浙江省衢州市": "浙江省",
+    "湖南省邵阳市": "湖南省",
+    "新疆维吾尔自治区阿勒泰地区": "新疆维吾尔自治区",
+    "广西壮族自治区钦州市": "广西壮族自治区",
+    "黔南州": "贵州省",
+    "大兴安岭地区": "黑龙江省",
+    "江苏省苏州市": "江苏省",
+    "湖南省岳阳市": "湖南省",
+    "河南省许昌市": "河南省",
+    "许昌市": "河南省",
+    "安徽省阜阳市": "安徽省",
+    "湖南省郴州市": "湖南省",
+    "湖南省株洲市": "湖南省",
+    "中山市": "广东省",
+    "张家界市": "湖南省",
+    "吕梁市": "山西省",
+    "四川省南充市": "四川省",
+    "河南省信阳市": "河南省",
+    "乌兰察布市": "内蒙古自治区",
+    "广东省中山市": "广东省",
+    "新疆维吾尔自治区克孜勒苏柯尔克孜自治州": "新疆维吾尔自治区",
+    "吐鲁番市": "新疆维吾尔自治区",
+    "新疆博尔塔拉蒙古自治州": "新疆维吾尔自治区",
+    "新疆维吾尔自治区博尔塔拉蒙古自治州": "新疆维吾尔自治区",
+    "新疆阿勒泰地区": "新疆维吾尔自治区",
+    "大庆市": "黑龙江省",
+    "福建省泉州市": "福建省",
+    "新疆巴音郭楞蒙古自治州": "新疆维吾尔自治区",
+    "广西壮族自治区贵港市": "广西壮族自治区",
+    "海西地区": "山东省",
+    "广西贵港市": "广西壮族自治区",
+    "内蒙古自治区阿拉善盟": "内蒙古自治区",
+    "内蒙古自治区乌兰察布市": "内蒙古自治区",
+    "攀枝花市": "四川省",
+    "承德市": "河北省",
+    "广东省云浮市": "广东省",
+    "鞍山": "辽宁省",
+    "绍兴市": "浙江省",
+    "新疆哈密": "新疆维吾尔自治区",
+    "湖北省鄂州市": "湖北省",
+    "威海市": "山东省",
+    "新疆维吾尔自治区昌吉回族自治州": "新疆维吾尔自治区",
+    "克孜勒苏": "新疆维吾尔自治区",
+    "江苏省常州市": "江苏省",
+    "河南省周口市": "河南省",
+    "四川省甘孜州": "四川省",
+    "安徽省蚌埠市": "安徽省",
+    "贵州省六盘水市": "贵州省",
+    "南充市": "四川省",
+    "云南省德宏州": "云南省",
+    "陕西省渭南市": "陕西省",
+    "宁夏回族自治区吴忠市": "宁夏回族自治区",
+    "浙江省舟山市": "浙江省",
+    "内蒙古自治区乌海市": "内蒙古自治区",
+    "苏州": "江苏省",
+    "广西壮族自治区柳州市": "广西壮族自治区",
+    "海南省三亚市": "海南省",
+    "张掖市": "甘肃省",
+    "新疆维吾尔自治区塔城地区": "新疆维吾尔自治区",
+    "塔城地区": "新疆维吾尔自治区",
+    "云南省曲靖市": "云南省",
+    "云南省普洱市": "云南省",
+    "新疆维吾尔自治区阿克苏地区": "新疆维吾尔自治区",
+    "湖南省衡阳市": "湖南省",
+    "广东省江门市": "广东省",
+    "云南省丽江市": "云南省",
+    "济宁市": "山东省",
+    "湖南省怀化市": "湖南省",
+    "浙江省金华市": "浙江省",
+    "金华市": "浙江省",
+    "山东省烟台市": "山东省",
+    "吐鲁番": "新疆维吾尔自治区",
+    "广东省潮州市": "广东省",
+    "浙江省绍兴市": "浙江省",
+    "淄博市": "山东省",
+    "广西来宾": "广西壮族自治区",
+    "驻马店市": "河南省",
+    "聊城市": "山东省",
+    "滁州市": "安徽省",
+    "果洛": "青海省",
+    "海北州": "青海省",
+    "浙江省丽水市": "浙江省",
+    "丽水市": "浙江省",
+    "贵港市": "广西壮族自治区",
+    "玉树": "青海省",
+    "滨州市": "山东省",
+    "大兴安岭": "内蒙古自治区",
+    "黑龙江省伊春市": "黑龙江省",
+    "鸡西市": "黑龙江省",
+    "辽宁省本溪市": "辽宁省",
+    "鄂州市": "湖北省",
+    "云南省文山州": "云南省",
+    "广东省梅州市": "广东省",
+    "菏泽市": "山东省",
+    "吐鲁番地区": "新疆维吾尔自治区",
+    "乌海": "内蒙古自治区",
+    "新疆克孜勒苏柯尔克孜自治州": "新疆维吾尔自治区",
+    "陕西省汉中市": "陕西省",
+    "新疆塔城": "新疆维吾尔自治区",
+    "辽宁省鞍山市": "辽宁省",
+    "贵州省黔南州": "贵州省",
+    "抚顺市": "辽宁省",
+    "辽源市": "吉林省",
+    "江西省鹰潭市": "江西省",
+    "江苏省连云港市": "江苏省",
+    "深圳市": "广东省",
+    "新疆": "新疆维吾尔自治区",
+    "浙江省宁波市": "浙江省",
+    "厦门": "福建省",
+    "宁波市": "浙江省",
+    "宁波": "浙江省",
+    "北京市": "北京市",
+    "贵州省黔南布依族苗族自治州": "贵州省",
+    "天津": "天津市",
+    "新疆哈密市": "新疆维吾尔自治区",
+    "甘肃省甘南藏族自治州": "甘肃省",
+    "新疆石河子市": "新疆维吾尔自治区",
+    "云南省楚雄彝族自治州": "云南省",
+    "广东省河源市": "广东省",
 }
 
 
@@ -437,14 +631,14 @@ def display_dfmonth(df):
     # components.html(map_data.render_embed(), height=650)
     # image3_text = "图三解析：处罚地图"
 
-    pie, orgname = print_pie(org_ls, count_ls, "按发文机构统计")
+    pie, orgname = print_pie(new_orgls, new_countls, "按发文机构统计")
 
     # 图四解析开始
-    orgls = pd.value_counts(df_month_loc["province"]).keys().tolist()
-    countls = pd.value_counts(df_month_loc["province"]).tolist()
+    # orgls = pd.value_counts(df_month_loc["province"]).keys().tolist()
+    # countls = pd.value_counts(df_month_loc["province"]).tolist()
     result = ""
 
-    for org, count in zip(orgls[:3], countls[:3]):
+    for org, count in zip(new_orgls[:3], new_countls[:3]):
         result = result + org + "（" + str(count) + "起）,"
 
     image4_text = (
@@ -453,7 +647,7 @@ def display_dfmonth(df):
         + "至"
         + maxmonth
         + "，共"
-        + str(len(orgls))
+        + str(len(new_orgls))
         + "家地区监管机构提出处罚意见，"
         + "排名前三的机构为："
         + result[: len(result) - 1]
@@ -1464,27 +1658,25 @@ def print_map(province_name, province_values, title_name):
 
 
 # combine count by province
-def count_by_province(orgls, countls):
-    result = dict()
-    for org in orgls:
-        # replace orgname
-        # new = (
-        #     org.replace("市", "")
-        #     .replace("省", "")
-        #     .replace("自治区", "")
-        #     .replace("回族", "")
-        #     .replace("壮族", "")
-        #     .replace("维吾尔", "")
-        #     .replace("特别行政区", "")
-        # )
-        new = org
-        if org == "":
-            new = "北京市"
+def count_by_province(city_ls, count_ls):
+    if len(city_ls) != len(count_ls):
+        raise ValueError("城市列表和计数列表的长度必须相同")
 
-        result[new] = countls[orgls.index(org)]
-    new_orgls = result.keys()
-    new_countls = result.values()
-    return new_orgls, new_countls
+    # Use Counter for efficient counting
+    province_counts = Counter()
+
+    # Use list comprehension for faster iteration
+    province_counts.update(
+        {city2province[loc]: count for loc, count in zip(city_ls, count_ls)}
+    )
+
+    # Use sorted with key function for efficient sorting
+    sorted_provinces = sorted(province_counts.items(), key=lambda x: (-x[1], x[0]))
+
+    # Use zip for efficient unpacking
+    provinces, counts = zip(*sorted_provinces)
+
+    return list(provinces), list(counts)
 
 
 # print pie charts
@@ -1560,6 +1752,11 @@ def update_cbirclabel():
     amtupdidls = [x for x in newidls if x not in amtoldidls]
 
     amtupddf = newdf[newdf["id"].isin(amtupdidls)]
+    # reset index
+    amtupddf.reset_index(drop=True, inplace=True)
+    # display newdf
+    st.markdown("### 待更新分类数据")
+    st.write(amtupddf)
     # if newdf is not empty, save it
     if amtupddf.empty is False:
         updlen = len(amtupddf)
@@ -1571,6 +1768,8 @@ def update_cbirclabel():
             data=amtupddf.to_csv().encode("utf_8_sig"),
             file_name=savename,
         )
+    else:
+        st.info("无待更新分类数据")
 
     if splitdf.empty:
         splitoldidls = []
@@ -1580,6 +1779,11 @@ def update_cbirclabel():
     splitupdidls = [x for x in newidls if x not in splitoldidls]
 
     splitupddf = newdf[newdf["id"].isin(splitupdidls)]
+    # reset index
+    splitupddf.reset_index(drop=True, inplace=True)
+    # display newdf
+    st.markdown("### 待更新拆分数据")
+    st.write(splitupddf)
     # if newdf is not empty, save it
     if splitupddf.empty is False:
         updlen = len(splitupddf)
@@ -1591,6 +1795,8 @@ def update_cbirclabel():
             data=splitupddf.to_csv().encode("utf_8_sig"),
             file_name=savename,
         )
+    else:
+        st.info("无待更新拆分数据")
 
     # labelupddf = anadf[anadf["id"].isin(labelupdidls)]
     # # if newdf is not empty, save it
