@@ -306,6 +306,18 @@ def get_cbircdetail(orgname):
 
     beginwith = "cbircdtl" + org_name_index
     d0 = get_csvdf(pencbirc, beginwith)
+    # Check if DataFrame is empty
+    if d0.empty:
+        st.warning(f"No detail data available for {orgname}")
+        return pd.DataFrame()
+    
+    # Check if required columns exist
+    required_columns = ["title", "subtitle", "date", "doc", "id"]
+    missing_columns = [col for col in required_columns if col not in d0.columns]
+    if missing_columns:
+        st.warning(f"Missing columns in detail data for {orgname}: {missing_columns}")
+        return pd.DataFrame()
+    
     # reset index
     d1 = d0[["title", "subtitle", "date", "doc", "id"]].reset_index(drop=True)
     # format date
@@ -322,6 +334,13 @@ def get_cbircdetail(orgname):
 def display_cbircsum(df):
     # get length of old eventdf
     oldlen = len(df)
+    # Check if DataFrame is empty or if required column exists
+    if df.empty or "发布日期" not in df.columns:
+        col1, col2 = st.columns([1, 3])
+        col1.metric("案例总数", oldlen)
+        col2.metric("日期范围", "无数据")
+        return
+    
     # get min and max date of old eventdf
     min_date = df["发布日期"].min()
     max_date = df["发布日期"].max()
@@ -335,6 +354,13 @@ def get_cbircsum(orgname):
     org_name_index = org2name[orgname]
     beginwith = "cbircsum" + org_name_index
     pendf = get_csvdf(pencbirc, beginwith)
+    # Check if DataFrame is empty or if required column exists
+    if pendf.empty:
+        st.warning(f"No summary data available for {orgname}")
+        return pd.DataFrame()
+    if "publishDate" not in pendf.columns:
+        st.warning(f"Column 'publishDate' not found in summary data for {orgname}")
+        return pendf
     # format date
     pendf["发布日期"] = pd.to_datetime(pendf["publishDate"]).dt.date
     return pendf
@@ -1446,35 +1472,53 @@ def download_cbircsum(org_namels):
         oldsum = get_csvdf(pencbirc, beginwith)
         lensum = len(oldsum)
         st.write("列表数据量: " + str(lensum))
-        # get unique id number
-        idls = oldsum["docId"].unique()
-        st.write("id数量: " + str(len(idls)))
+        
+        # Check if DataFrame is empty or doesn't have docId column
+        if lensum > 0 and "docId" in oldsum.columns:
+            # get unique id number
+            idls = oldsum["docId"].unique()
+            st.write("id数量: " + str(len(idls)))
+        else:
+            st.write("id数量: 0 (无数据或缺少docId列)")
 
         beginwith = "cbircdtl" + org_name_index
         dtl = get_csvdf(pencbirc, beginwith)
         lendtl = len(dtl)
         st.write("详情数据量: " + str(lendtl))
-        # get unique id number
-        idls = dtl["id"].unique()
-        st.write("id数量: " + str(len(idls)))
+        
+        # Check if DataFrame is empty or doesn't have id column
+        if lendtl > 0 and "id" in dtl.columns:
+            # get unique id number
+            idls = dtl["id"].unique()
+            st.write("id数量: " + str(len(idls)))
+        else:
+            st.write("id数量: 0 (无数据或缺少id列)")
 
-        # drop duplicates
-        oldsum.drop_duplicates("docId", inplace=True)
-        # listname
-        listname = "cbircsum" + org_name_index + get_nowdate() + ".csv"
-        # download list data
-        st.download_button(
-            "下载列表数据", data=oldsum.to_csv().encode("utf_8_sig"), file_name=listname
-        )
+        # Only process if data exists
+        if lensum > 0 and "docId" in oldsum.columns:
+            # drop duplicates
+            oldsum.drop_duplicates("docId", inplace=True)
+            # listname
+            listname = "cbircsum" + org_name_index + get_nowdate() + ".csv"
+            # download list data
+            st.download_button(
+                "下载列表数据", data=oldsum.to_csv().encode("utf_8_sig"), file_name=listname
+            )
+        else:
+            st.warning("无列表数据可下载")
 
-        # drop duplicates
-        dtl.drop_duplicates("id", inplace=True)
-        # detailname
-        detailname = "cbircdtl" + org_name_index + get_nowdate() + ".csv"
-        # download detail data
-        st.download_button(
-            "下载详情数据", data=dtl.to_csv().encode("utf_8_sig"), file_name=detailname
-        )
+        # Only process if data exists
+        if lendtl > 0 and "id" in dtl.columns:
+            # drop duplicates
+            dtl.drop_duplicates("id", inplace=True)
+            # detailname
+            detailname = "cbircdtl" + org_name_index + get_nowdate() + ".csv"
+            # download detail data
+            st.download_button(
+                "下载详情数据", data=dtl.to_csv().encode("utf_8_sig"), file_name=detailname
+            )
+        else:
+            st.warning("无详情数据可下载")
 
     st.markdown("#### 分类数据下载")
 
@@ -1484,33 +1528,45 @@ def download_cbircsum(org_namels):
     analysis = get_csvdf(pencbirc, beginwith)
     lenanalysis = len(analysis)
     st.write("拆分数据量: " + str(lenanalysis))
-    # get unique id number
-    idls = analysis["id"].unique()
-    st.write("id数量: " + str(len(idls)))
-
-    analysisname = "cbircsplit" + get_nowdate() + ".csv"
-    # drop duplicates
-    analysis.drop_duplicates("id", inplace=True)
-    # download analysis data
-    st.download_button(
-        "下载拆分数据",
-        data=analysis.to_csv().encode("utf_8_sig"),
-        file_name=analysisname,
-    )
+    
+    # Check if DataFrame is empty or doesn't have id column
+    if lenanalysis > 0 and "id" in analysis.columns:
+        # get unique id number
+        idls = analysis["id"].unique()
+        st.write("id数量: " + str(len(idls)))
+        
+        analysisname = "cbircsplit" + get_nowdate() + ".csv"
+        # drop duplicates
+        analysis.drop_duplicates("id", inplace=True)
+        # download analysis data
+        st.download_button(
+            "下载拆分数据",
+            data=analysis.to_csv().encode("utf_8_sig"),
+            file_name=analysisname,
+        )
+    else:
+        st.write("id数量: 0 (无数据或缺少id列)")
+        st.warning("无拆分数据可下载")
 
     catdf = get_csvdf(pencbirc, "cbirccat")
     lencat = len(catdf)
     st.write("分类数据量: " + str(lencat))
-    # get unique id number
-    idls = catdf["id"].unique()
-    st.write("id数量: " + str(len(idls)))
-
-    allname = "cbirccat" + get_nowdate() + ".csv"
-    # drop duplicates
-    catdf.drop_duplicates("id", inplace=True)
-    st.download_button(
-        "下载分类数据", data=catdf.to_csv().encode("utf_8_sig"), file_name=allname
-    )
+    
+    # Check if DataFrame is empty or doesn't have id column
+    if lencat > 0 and "id" in catdf.columns:
+        # get unique id number
+        idls = catdf["id"].unique()
+        st.write("id数量: " + str(len(idls)))
+        
+        allname = "cbirccat" + get_nowdate() + ".csv"
+        # drop duplicates
+        catdf.drop_duplicates("id", inplace=True)
+        st.download_button(
+            "下载分类数据", data=catdf.to_csv().encode("utf_8_sig"), file_name=allname
+        )
+    else:
+        st.write("id数量: 0 (无数据或缺少id列)")
+        st.warning("无分类数据可下载")
 
 
 def get_cbirccat():
