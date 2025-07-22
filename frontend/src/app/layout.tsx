@@ -21,11 +21,11 @@ export default function RootLayout({
     <html lang="zh-CN">
       <body className={inter.className}>
         <Providers>
-          <div className="min-h-screen bg-background">
+          <div className="min-h-screen">
             <Header />
             <div className="flex">
               <Sidebar />
-              <main className="flex-1 p-6">
+              <main className="flex-1 min-h-[calc(100vh-5rem)] overflow-auto">
                 {children}
               </main>
             </div>
