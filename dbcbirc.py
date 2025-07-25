@@ -1011,11 +1011,7 @@ def get_sumeventdf(orgname, start, end):
     }
     org_name_index = org_index[orgname]
 
-    baseurl = (
-        "https://www.cbirc.gov.cn/cbircweb/DocInfo/SelectDocByItemIdAndChild?itemId="
-        + org_name_index
-        + "&pageSize=18&pageIndex="
-    )
+    baseurl = "https://www.nfra.gov.cn/cbircweb/DocInfo/SelectDocByItemIdAndChild?itemId={}&pageSize=18&pageIndex={}"
 
     resultls = []
     errorls = []
@@ -1023,7 +1019,7 @@ def get_sumeventdf(orgname, start, end):
     for i in range(start, end + 1):
         st.info("page: " + str(i))
         st.info(str(count) + " begin")
-        url = baseurl + str(i)
+        url = baseurl.format(org_name_index, i)
         st.info("url:" + url)
         try:
             dd = requests.get(url, verify=False)

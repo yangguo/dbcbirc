@@ -10,7 +10,11 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Python libraries (be more specific to avoid conflicts with frontend)
+backend/lib/
+*.egg-info/lib/
+# Allow frontend lib directory
+!frontend/src/lib/
 lib64/
 parts/
 sdist/
