@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     
     # CORS Settings
-    ALLOWED_HOSTS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    ALLOWED_HOSTS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"]
     
     # Database Settings
     MONGO_DB_URL: str = os.getenv("MONGO_DB_URL", "mongodb://localhost:27017/")

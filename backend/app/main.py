@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from app.api.v1 import cases, search, analytics, admin
+from app.api.v1 import cases, search, analytics, admin, classification
 from app.core.config import settings
 from app.core.database import db_manager
 
@@ -25,7 +25,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_HOSTS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,6 +36,7 @@ app.include_router(cases.router, prefix="/api/v1/cases", tags=["cases"])
 app.include_router(search.router, prefix="/api/v1/search", tags=["search"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(classification.router, prefix="/api/v1/classification", tags=["classification"])
 
 @app.get("/")
 async def root():

@@ -128,3 +128,8 @@ class AdminService:
             "银保监分局本级": "fenju"
         }
         return org_mapping.get(org_name, "")
+
+
+# Create a global instance of AdminService
+# Note: Database will be set when the application starts
+admin_service = AdminService(None)

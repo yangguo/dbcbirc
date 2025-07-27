@@ -11,7 +11,8 @@ import {
   FileText,
   Download,
   RefreshCw,
-  Zap
+  Zap,
+  Tags
 } from 'lucide-react'
 
 const navigation = [
@@ -28,6 +29,13 @@ const navigation = [
     icon: Search,
     gradient: 'from-green-500 to-teal-600',
     bgGradient: 'from-green-500/10 to-teal-600/10',
+  },
+  {
+    name: '案例分类',
+    href: '/classification',
+    icon: Tags,
+    gradient: 'from-indigo-500 to-blue-600',
+    bgGradient: 'from-indigo-500/10 to-blue-600/10',
   },
   {
     name: '数据分析',
