@@ -1137,7 +1137,7 @@ def get_eventdetail(eventsum, orgname):
     #     "https://www.cbirc.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId="
     # )
     # update baseurl
-    baseurl = "https://www.nfra.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId="
+    baseurl = "https://www.nfra.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId"
     resultls = []
     errorls = []
     count = 0
@@ -1148,14 +1148,47 @@ def get_eventdetail(eventsum, orgname):
         st.info("url:" + url)
         try:
             dd = requests.get(url, verify=False)
+            
+            # Check HTTP status code first
+            if dd.status_code != 200:
+                raise ValueError(f"HTTP {dd.status_code}: {dd.reason}")
+            
+            # Check content type
+            content_type = dd.headers.get('content-type', '').lower()
+            if 'application/json' not in content_type:
+                st.warning(f"Unexpected content type: {content_type}")
+            
             sd = BeautifulSoup(dd.content, "html.parser")
+            response_text = str(sd.text).strip()
+            
+            # Check for common error responses
+            if not response_text:
+                raise ValueError("Empty response from server")
+            
+            if response_text.startswith('<') or 'nginx' in response_text.lower() or '404' in response_text:
+                raise ValueError(f"Server returned HTML error page: {response_text[:100]}")
+            
+            # Try to parse JSON with better error handling
+            try:
+                json_data = json.loads(response_text)
+            except json.JSONDecodeError as json_err:
+                st.error(f"JSON decode error: {json_err}")
+                st.error(f"Response text preview: {response_text[:200]}...")
+                raise ValueError(f"Invalid JSON response: {json_err}")
 
-            json_data = json.loads(str(sd.text))
-
-            title = json_data["data"]["docTitle"]
-            subtitle = json_data["data"]["docSubtitle"]
-            date = json_data["data"]["publishDate"]
-            doc = json_data["data"]["docClob"]
+            # Validate JSON structure
+            if not isinstance(json_data, dict) or "data" not in json_data:
+                raise ValueError("Invalid JSON structure: missing 'data' field")
+            
+            data_obj = json_data["data"]
+            if not isinstance(data_obj, dict):
+                raise ValueError("Invalid data structure in JSON response")
+                
+            title = data_obj.get("docTitle", "")
+            subtitle = data_obj.get("docSubtitle", "")
+            date = data_obj.get("publishDate", "")
+            doc = data_obj.get("docClob", "")
+            
             datals = {"title": title, "subtitle": subtitle, "date": date, "doc": doc}
 
             df = pd.DataFrame(datals, index=[0])
