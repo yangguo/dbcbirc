@@ -1842,12 +1842,17 @@ def update_cbirclabel():
     newdf = get_cbircdetail("")
     # get id list
     newidls = newdf["id"].tolist()
-
+    # display the num of new idls
+    st.info("新案例数量：" + str(len(newidls)))
     # get amount details
     amtdf = get_cbirccat()
+    # display the num of amtdf
+    st.info("已分类案例数量：" + str(len(amtdf)))
 
     # get splitdf
     splitdf = get_cbircanalysis("")
+    # display the num of splitdf
+    st.info("已拆分案例数量：" + str(len(splitdf)))
 
     # if amtdf is not empty
     if amtdf.empty:
@@ -1858,6 +1863,8 @@ def update_cbirclabel():
     amtupdidls = [x for x in newidls if x not in amtoldidls]
 
     amtupddf = newdf[newdf["id"].isin(amtupdidls)]
+    # sory by date
+    amtupddf = amtupddf.sort_values(by="发布日期", ascending=False)
     # reset index
     amtupddf.reset_index(drop=True, inplace=True)
     # display newdf
