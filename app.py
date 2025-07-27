@@ -75,10 +75,14 @@ def main():
         end_num = st.sidebar.number_input("结束页", value=1)
         # convert to int
         end_num = int(end_num)
+        # Initialize session state for the update form
+        if f"show_update_form_{org_name}" not in st.session_state:
+            st.session_state[f"show_update_form_{org_name}"] = False
+
         # button to scrapy web
         sumeventbutton = st.sidebar.button("更新列表")
-
         if sumeventbutton:
+            st.session_state[f"show_update_form_{org_name}"] = False
             # get sumeventdf
             sumeventdf = get_sumeventdf(org_name, start_num, end_num)
             # get length of sumeventdf
@@ -95,26 +99,163 @@ def main():
         # update detail button
         eventdetailbutton = st.sidebar.button("更新详情")
         if eventdetailbutton:
-            for org_name in org_namels:
-                # write org_name
-                st.markdown("#### 更新详情：" + org_name)
-                # update sumeventdf
-                newsum = update_toupd(org_name)
-                # get length of toupd
-                newsum_len = len(newsum)
-                # display sumeventdf
-                st.success(f"共{newsum_len}条案例待更新")
-                if newsum_len > 0:
-                    # get toupdate list
-                    toupd = get_cbirctoupd(org_name)
-                    # get event detail
-                    eventdetail = get_eventdetail(toupd, org_name)
-                    # get length of eventdetail
-                    eventdetail_len = len(eventdetail)
-                    # display eventdetail
-                    st.success(f"更新完成，共{eventdetail_len}条案例详情")
+            st.session_state[f"show_update_form_{org_name}"] = True
+            # st.experimental_rerun()
+
+        if st.session_state.get(f"show_update_form_{org_name}", False):
+            # Only process the selected org_name from sidebar, not all organizations
+            st.markdown("#### 更新详情：" + org_name)
+            # update sumeventdf
+            newsum = update_toupd(org_name)
+            # get length of toupd
+            newsum_len = len(newsum)
+            # display sumeventdf
+            st.success(f"共{newsum_len}条案例待更新")
+            if newsum_len > 0:
+                # get toupdate list
+                toupd = get_cbirctoupd(org_name)
+
+                if not toupd.empty:
+                    # Create display columns
+                    display_cols = ["docId", "title", "subtitle", "publishDate"]
+                    available_cols = [
+                        col for col in display_cols if col in toupd.columns
+                    ]
+
+                    if available_cols:
+                        display_df = toupd[available_cols].copy()
+                        # Rename columns for better display
+                        col_mapping = {
+                            "docId": "文档ID",
+                            "title": "标题",
+                            "subtitle": "文号",
+                            "publishDate": "发布日期",
+                        }
+                        display_df = display_df.rename(
+                            columns={
+                                k: v
+                                for k, v in col_mapping.items()
+                                if k in display_df.columns
+                            }
+                        )
+
+                        # Initialize session state for selected rows
+                        selection_key = f"selected_rows_{org_name}"
+                        if selection_key not in st.session_state:
+                            st.session_state[selection_key] = []
+
+                        # Use form to prevent auto-refresh on selection
+                        with st.form(key=f"selection_form_{org_name}"):
+                            st.write("### 选择要更新的记录")
+
+                            # Show the dataframe for reference with checkboxes
+                            st.write(f"共 {len(display_df)} 条待更新记录:")
+
+                            # Create checkbox options for each record with more compact display
+                            selected_indices = []
+
+                            # Display records in a more compact way with checkboxes
+                            for idx, row in display_df.iterrows():
+                                col1, col2 = st.columns([1, 9])
+
+                                with col1:
+                                    # Check if this record was previously selected
+                                    default_value = (
+                                        idx in st.session_state[selection_key]
+                                    )
+
+                                    is_selected = st.checkbox(
+                                        "",
+                                        value=default_value,
+                                        key=f"checkbox_{org_name}_{idx}",
+                                    )
+                                    if is_selected:
+                                        selected_indices.append(idx)
+
+                                with col2:
+                                    # Display record info in a compact format
+                                    if (
+                                        "文档ID" in row
+                                        and "标题" in row
+                                        and "发布日期" in row
+                                    ):
+                                        st.write(
+                                            f"**{row['文档ID']}** | {row['标题'][:60]}... | {row['发布日期']}"
+                                        )
+                                    else:
+                                        st.write(
+                                            f"**{str(row.iloc[0])}** | {str(row.iloc[1])[:60]}..."
+                                        )
+
+                            # Submit button for the form
+                            submitted = st.form_submit_button("确认选择并开始更新")
+
+                        # Handle form submission outside the form
+                        if submitted:
+                            st.session_state[selection_key] = selected_indices
+                            if selected_indices:
+                                # Display progress message
+                                st.info(f"正在更新选中的 {len(selected_indices)} 条记录...")
+
+                                try:
+                                    # Get selected records using loc for non-continuous indices
+                                    selected_toupd = toupd.loc[
+                                        selected_indices
+                                    ].copy()
+
+                                    # get event detail for selected records
+                                    eventdetail = get_eventdetail(
+                                        selected_toupd, org_name
+                                    )
+                                    # get length of eventdetail
+                                    eventdetail_len = len(eventdetail)
+                                    # display eventdetail
+                                    st.success(f"更新完成，共{eventdetail_len}条案例详情")
+
+                                    # Update session state to record the successful update
+                                    st.session_state[
+                                        f"last_update_{org_name}"
+                                    ] = {
+                                        "count": eventdetail_len,
+                                        "indices": selected_indices,
+                                    }
+                                    st.session_state[
+                                        selection_key
+                                    ] = []  # Clear selection
+                                    # st.experimental_rerun()
+
+                                except Exception as e:
+                                    st.error(f"更新失败: {e}")
+                                    st.write(f"尝试更新的行索引: {selected_indices}")
+                                    st.write(f"错误详情: {str(e)}")
+                            else:
+                                st.warning("请先选择要更新的记录")
+
+                        # Display last update info if available
+                        if f"last_update_{org_name}" in st.session_state:
+                            last_update = st.session_state[
+                                f"last_update_{org_name}"
+                            ]
+                            st.info(f"上次更新了 {last_update['count']} 条记录")
+
+                        # Always show update all button
+                        st.markdown("---")
+                        if st.button(
+                            f"更新全部 {newsum_len} 条记录",
+                            key=f"update_all_{org_name}",
+                        ):
+                            # get event detail
+                            eventdetail = get_eventdetail(toupd, org_name)
+                            # get length of eventdetail
+                            eventdetail_len = len(eventdetail)
+                            # display eventdetail
+                            st.success(f"更新完成，共{eventdetail_len}条案例详情")
+                    else:
+                        st.error(f"待更新数据缺少必要列: {display_cols}")
                 else:
-                    st.error("没有更新的案例")
+                    st.error("获取待更新记录失败")
+            else:
+                st.error("没有更新的案例")
 
         # button to refresh page
         # refreshbutton = st.sidebar.button("刷新页面")

@@ -1062,13 +1062,13 @@ def savedf(df, basename):
 def update_sumeventdf(currentsum, orgname):
     org_name_index = org2name[orgname]
     # get sumeventdf
-    # currentsum = get_cbirctempsum(orgname)
+    oldsum = get_cbircsum(orgname)
     # get detail
-    oldsum = get_cbircdetail(orgname)
+    # oldsum = get_cbircdetail(orgname)
     if oldsum.empty:
         oldidls = []
     else:
-        oldidls = oldsum["id"].tolist()
+        oldidls = oldsum["docId"].tolist()
     currentidls = currentsum["docId"].tolist()
     # print('oldidls:',oldidls)
     # print('currentidls:', currentidls)
@@ -1137,14 +1137,14 @@ def get_eventdetail(eventsum, orgname):
     #     "https://www.cbirc.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId="
     # )
     # update baseurl
-    baseurl = "https://www.cbirc.gov.cn/cbircweb/DocInfo/SelectByDocId?docId="
+    baseurl = "https://www.nfra.gov.cn/cn/static/data/DocInfo/SelectByDocId/data_docId="
     resultls = []
     errorls = []
     count = 0
     for i in docidls:
         st.info("id: " + str(i))
         st.info(str(count) + " begin")
-        url = baseurl + str(i)  # + ".json"
+        url = baseurl + "=" + str(i) + ".json"
         st.info("url:" + url)
         try:
             dd = requests.get(url, verify=False)
