@@ -30,22 +30,6 @@ async def update_cases(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/update-status")
-async def get_update_status():
-    """Get status of ongoing updates"""
-    try:
-        # This would typically check a task queue or database
-        # For now, return a simple status
-        return {
-            "status": "idle",
-            "last_update": None,
-            "progress": 0
-        }
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/refresh-data")
 async def refresh_data():
     """Refresh cached data"""

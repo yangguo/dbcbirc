@@ -66,11 +66,6 @@ class ApiClient {
     return this.request('/api/v1/admin/system-info')
   }
 
-  // Admin - Update Status
-  async getUpdateStatus() {
-    return this.request('/api/v1/admin/update-status')
-  }
-
   // Admin - Update Cases
   async updateCases(orgName: string, startPage: number, endPage: number) {
     return this.request('/api/v1/admin/update-cases', {

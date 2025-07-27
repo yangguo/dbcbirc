@@ -5,33 +5,34 @@ import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
 import { apiClient } from '@/lib/api'
-import { CheckCircle, XCircle, Clock, Database, Server, Wifi } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, Database, Server, Wifi, RefreshCw } from 'lucide-react'
 
 export function SystemStatus() {
-  const { data: systemInfo, isLoading } = useQuery({
+  const { data: systemInfo, isLoading, refetch: refetchSystemInfo } = useQuery({
     queryKey: ['system-info'],
     queryFn: () => apiClient.getSystemInfo(),
-    refetchInterval: 10000, // Refresh every 10 seconds
+    enabled: false, // Disable automatic fetching
   })
 
-  const { data: updateStatus } = useQuery({
-    queryKey: ['update-status'],
-    queryFn: () => apiClient.getUpdateStatus(),
-    refetchInterval: 5000, // Refresh every 5 seconds
-  })
-
-  const { data: stats } = useQuery({
+  const { data: stats, refetch: refetchStats } = useQuery({
     queryKey: ['case-stats'],
     queryFn: () => apiClient.getCaseStats(),
+    enabled: false, // Disable automatic fetching
   })
+
+  const handleRefreshAll = () => {
+    refetchSystemInfo()
+    refetchStats()
+  }
 
   const statusItems = [
     {
       name: '数据库连接',
-      status: systemInfo?.database_status === 'connected' ? 'healthy' : 'error',
+      status: (systemInfo as any)?.database_status === 'connected' ? 'healthy' : 'error',
       icon: Database,
-      description: systemInfo?.database_status === 'connected' ? '数据库连接正常' : '数据库连接异常',
+      description: (systemInfo as any)?.database_status === 'connected' ? '数据库连接正常' : '数据库连接异常',
     },
     {
       name: 'API服务',
@@ -45,12 +46,7 @@ export function SystemStatus() {
       icon: Wifi,
       description: '网络连接正常',
     },
-    {
-      name: '数据更新',
-      status: updateStatus?.status === 'idle' ? 'idle' : 'running',
-      icon: Clock,
-      description: updateStatus?.status === 'idle' ? '数据更新空闲' : '数据更新进行中',
-    },
+
   ]
 
   const getStatusIcon = (status: string) => {
@@ -93,6 +89,13 @@ export function SystemStatus() {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold">系统状态</h2>
+        <Button onClick={handleRefreshAll} variant="outline" size="sm">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          刷新状态
+        </Button>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         {statusItems.map((item) => (
           <Card key={item.name}>
@@ -113,29 +116,6 @@ export function SystemStatus() {
         ))}
       </div>
 
-      {updateStatus?.status === 'running' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>数据更新进度</CardTitle>
-            <CardDescription>
-              当前数据更新任务的进度
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>更新进度</span>
-                <span>{updateStatus.progress || 0}%</span>
-              </div>
-              <Progress value={updateStatus.progress || 0} className="w-full" />
-              <p className="text-sm text-muted-foreground">
-                正在更新数据，请稍候...
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -149,25 +129,25 @@ export function SystemStatus() {
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">案例总数</span>
                 <span className="text-sm font-medium">
-                  {stats?.total_cases?.toLocaleString() || 0}
+                  {(stats as any)?.total_cases?.toLocaleString() || 0}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">处罚总金额</span>
                 <span className="text-sm font-medium">
-                  {stats ? `${(stats.total_amount / 100000000).toFixed(1)}亿元` : '0'}
+                  {stats ? `${((stats as any).total_amount / 100000000).toFixed(1)}亿元` : '0'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">数据时间范围</span>
                 <span className="text-sm font-medium">
-                  {stats?.date_range ? `${stats.date_range.start} 至 ${stats.date_range.end}` : '暂无'}
+                  {(stats as any)?.date_range ? `${(stats as any).date_range.start} 至 ${(stats as any).date_range.end}` : '暂无'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">涉及省份</span>
                 <span className="text-sm font-medium">
-                  {stats?.by_province ? Object.keys(stats.by_province).length : 0}
+                  {(stats as any)?.by_province ? Object.keys((stats as any).by_province).length : 0}
                 </span>
               </div>
             </div>
@@ -186,13 +166,13 @@ export function SystemStatus() {
               <div className="flex items-center justify-between">
                 <span className="text-sm">数据库连接</span>
                 <div className="flex items-center space-x-2">
-                  {systemInfo?.database_status === 'connected' ? (
+                  {(systemInfo as any)?.database_status === 'connected' ? (
                     <CheckCircle className="h-4 w-4 text-green-500" />
                   ) : (
                     <XCircle className="h-4 w-4 text-red-500" />
                   )}
                   <span className="text-sm">
-                    {systemInfo?.database_status === 'connected' ? '正常' : '异常'}
+                    {(systemInfo as any)?.database_status === 'connected' ? '正常' : '异常'}
                   </span>
                 </div>
               </div>

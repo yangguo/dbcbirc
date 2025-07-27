@@ -22,12 +22,6 @@ export function DataManagement() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
-  const { data: updateStatus } = useQuery({
-    queryKey: ['update-status'],
-    queryFn: () => apiClient.getUpdateStatus(),
-    refetchInterval: 5000,
-  })
-
   const updateCasesMutation = useMutation({
     mutationFn: ({ orgName, startPage, endPage }: { orgName: string; startPage: number; endPage: number }) =>
       apiClient.updateCases(orgName, startPage, endPage),
@@ -36,7 +30,7 @@ export function DataManagement() {
         title: '更新任务已启动',
         description: '数据更新任务已在后台开始执行',
       })
-      queryClient.invalidateQueries({ queryKey: ['update-status'] })
+      // Update task started successfully
     },
     onError: (error) => {
       toast({
@@ -72,6 +66,8 @@ export function DataManagement() {
       endPage: updateForm.endPage,
     })
   }
+
+
 
   const handleExportData = async () => {
     try {
@@ -154,7 +150,7 @@ export function DataManagement() {
             <div className="flex gap-2">
               <Button 
                 onClick={handleUpdateCases}
-                disabled={updateCasesMutation.isPending || updateStatus?.status === 'running'}
+                disabled={updateCasesMutation.isPending}
                 className="flex-1"
               >
                 {updateCasesMutation.isPending ? (
@@ -166,17 +162,7 @@ export function DataManagement() {
               </Button>
             </div>
 
-            {updateStatus?.status === 'running' && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <RefreshCw className="h-4 w-4 animate-spin text-blue-600" />
-                  <span className="text-sm text-blue-800">数据更新进行中...</span>
-                  <Badge variant="default" className="bg-blue-500">
-                    {updateStatus.progress || 0}%
-                  </Badge>
-                </div>
-              </div>
-            )}
+
           </CardContent>
         </Card>
 
@@ -224,6 +210,8 @@ export function DataManagement() {
               )}
               刷新数据缓存
             </Button>
+
+
 
             <Button variant="outline" className="w-full">
               <Database className="h-4 w-4 mr-2" />

@@ -11,13 +11,7 @@ export function AdminDashboard() {
   const { data: systemInfo, isLoading, refetch } = useQuery({
     queryKey: ['system-info'],
     queryFn: () => apiClient.getSystemInfo(),
-    refetchInterval: 30000, // Refresh every 30 seconds
-  })
-
-  const { data: updateStatus } = useQuery({
-    queryKey: ['update-status'],
-    queryFn: () => apiClient.getUpdateStatus(),
-    refetchInterval: 5000, // Refresh every 5 seconds
+    enabled: false, // Disable automatic fetching
   })
 
   const handleRefreshData = async () => {
@@ -27,6 +21,10 @@ export function AdminDashboard() {
     } catch (error) {
       console.error('Failed to refresh data:', error)
     }
+  }
+
+  const handleRefreshSystemInfo = () => {
+    refetch()
   }
 
   return (
@@ -39,8 +37,8 @@ export function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="flex items-center space-x-2">
-              <Badge variant={systemInfo?.database_status === 'connected' ? 'default' : 'destructive'}>
-                {systemInfo?.database_status === 'connected' ? '已连接' : '未连接'}
+              <Badge variant={(systemInfo as any)?.database_status === 'connected' ? 'default' : 'destructive'}>
+                {(systemInfo as any)?.database_status === 'connected' ? '已连接' : '未连接'}
               </Badge>
             </div>
           </CardContent>
@@ -53,21 +51,7 @@ export function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {systemInfo?.api_version || 'v1.0.0'}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">更新状态</CardTitle>
-            <RefreshCw className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center space-x-2">
-              <Badge variant={updateStatus?.status === 'idle' ? 'secondary' : 'default'}>
-                {updateStatus?.status === 'idle' ? '空闲' : '运行中'}
-              </Badge>
+              {(systemInfo as any)?.api_version || 'v1.0.0'}
             </div>
           </CardContent>
         </Card>
@@ -94,13 +78,13 @@ export function AdminDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button onClick={handleRefreshData} className="w-full">
+            <Button onClick={handleRefreshSystemInfo} className="w-full">
               <RefreshCw className="h-4 w-4 mr-2" />
-              刷新数据缓存
+              刷新系统状态
             </Button>
-            <Button variant="outline" className="w-full">
+            <Button onClick={handleRefreshData} variant="outline" className="w-full">
               <Database className="h-4 w-4 mr-2" />
-              检查数据库连接
+              刷新数据缓存
             </Button>
             <Button variant="outline" className="w-full">
               <Activity className="h-4 w-4 mr-2" />
@@ -121,27 +105,16 @@ export function AdminDashboard() {
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">数据库状态</span>
                 <span className="text-sm font-medium">
-                  {systemInfo?.database_status || '未知'}
+                  {(systemInfo as any)?.database_status || '未知'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">API版本</span>
                 <span className="text-sm font-medium">
-                  {systemInfo?.api_version || '未知'}
+                  {(systemInfo as any)?.api_version || '未知'}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">最后更新</span>
-                <span className="text-sm font-medium">
-                  {updateStatus?.last_update || '从未'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">更新进度</span>
-                <span className="text-sm font-medium">
-                  {updateStatus?.progress || 0}%
-                </span>
-              </div>
+
             </div>
           </CardContent>
         </Card>
