@@ -26,8 +26,10 @@ org2name = {
 }
 
 def get_csvdf(penfolder, beginwith):
-    """Read CSV files matching pattern"""
-    files = glob.glob(os.path.join(penfolder, "**", f"{beginwith}*.csv"), recursive=True)
+    """Read CSV files matching pattern from root directory only"""
+    # 只读取根目录下的文件，不递归查找子目录
+    files = glob.glob(os.path.join(penfolder, f"{beginwith}*.csv"))
+    
     dflist = []
     for filepath in files:
         try:

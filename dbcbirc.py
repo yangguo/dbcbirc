@@ -259,13 +259,20 @@ def get_csvdf(penfolder, beginwith):
     # if os.path.exists(filepath):
     #     df = pd.read_parquet(filepath)
     # else:
-    files2 = glob.glob(penfolder + "**/" + beginwith + "*.csv", recursive=True)
+    
+    # 只读取根目录下的文件，不递归查找子目录
+    files2 = glob.glob(os.path.join(penfolder, beginwith + "*.csv"))
+    
     dflist = []
     # filelist = []
     for filepath in files2:
-        pendf = pd.read_csv(filepath)
-        dflist.append(pendf)
-        # filelist.append(filename)
+        try:
+            pendf = pd.read_csv(filepath)
+            dflist.append(pendf)
+            # filelist.append(filename)
+        except Exception as e:
+            print(f"读取文件 {filepath} 失败: {e}")
+    
     if len(dflist) > 0:
         df = pd.concat(dflist)
         df.reset_index(drop=True, inplace=True)
