@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Data folder path
-DATA_FOLDER = "/Users/vyang/Desktop/spaces/dbcbirc/cbirc"
+DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))), "cbirc")
 
 # Organization name mapping
 org2name = {

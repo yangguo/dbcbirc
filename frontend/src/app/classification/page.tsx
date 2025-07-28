@@ -222,7 +222,9 @@ export default function ClassificationPage() {
         })
         
         // 下载结果文件
-        const blob = new Blob([result.csv_data], { type: 'text/csv' })
+        // 添加 BOM 以确保中文字符正确显示
+        const BOM = '\uFEFF'
+        const blob = new Blob([BOM + result.csv_data], { type: 'text/csv;charset=utf-8' })
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
@@ -266,7 +268,9 @@ export default function ClassificationPage() {
       )
     ].join('\n')
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' })
+    // 添加 BOM 以确保中文字符正确显示
+    const BOM = '\uFEFF'
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

@@ -237,7 +237,7 @@ Thumbs.db
 *~
 
 # Project specific
-cbirc/*.csv
+cbirc/*.*
 cbirc/*.parquet
 cbirc/temp/
 data/
