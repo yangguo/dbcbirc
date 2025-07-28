@@ -14,11 +14,21 @@ class Settings(BaseSettings):
     
     # Database Settings
     MONGO_DB_URL: str = os.getenv("MONGO_DB_URL", "mongodb://localhost:27017/")
+    MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017/")
     DATABASE_NAME: str = "cbirc_analysis"
     
     # External APIs
     DIFY_API_KEY: str = os.getenv("DIFY_API_KEY", "")
     DIFY_API_URL: str = os.getenv("DIFY_API_URL", "")
+    
+    # OpenAI/LLM Settings
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+    OPENAI_VISION_MODEL: str = os.getenv("OPENAI_VISION_MODEL", "gpt-4-vision-preview")
+    
+    # Frontend Settings
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     
     # File Storage
     DATA_FOLDER: str = "cbirc"

@@ -284,7 +284,7 @@ async def generate_classification_data():
                 "title": row["标题"],
                 "subtitle": row["文号"],
                 "publishDate": str(row["发布日期"]) if pd.notna(row["发布日期"]) else "",
-                "content": row["内容"][:500] + "..." if len(str(row["内容"])) > 500 else str(row["内容"]),  # Truncate long content
+                "content": str(row["内容"]),  # Full content without truncation
                 "category": None  # These are uncategorized
             }
             cases_data.append(case_dict)

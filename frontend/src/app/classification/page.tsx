@@ -53,8 +53,7 @@ export default function ClassificationPage() {
     monthly_stats: {}
   })
   const [textInput, setTextInput] = useState('')
-  const [labelsInput, setLabelsInput] = useState('违规放贷,内控管理,反洗钱,消费者权益,信息披露,风险管理')
-  const [classificationResult, setClassificationResult] = useState<any>(null)
+  const [extractResult, setExtractResult] = useState<any>(null)
 
   // 获取分类统计数据
   useEffect(() => {
@@ -114,12 +113,12 @@ export default function ClassificationPage() {
     }
   }
 
-  // 单文本分类
-  const handleClassifyText = async () => {
+  // 处罚信息提取
+  const handleExtractPenaltyInfo = async () => {
     if (!textInput.trim()) {
       toast({
         title: '错误',
-        description: '请输入要分类的文本',
+        description: '请输入要提取的文本',
         variant: 'destructive',
       })
       return
@@ -127,36 +126,35 @@ export default function ClassificationPage() {
 
     setProcessing(true)
     try {
-      const response = await fetch('http://localhost:8000/api/v1/classification/classify-text', {
+      const response = await fetch('http://localhost:8000/api/v1/classification/extract-penalty-info', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          text: textInput,
-          labels: labelsInput.split(',').map(l => l.trim())
+          text: textInput
         })
       })
 
       if (response.ok) {
         const result = await response.json()
-        setClassificationResult(result)
+        setExtractResult(result)
         toast({
           title: '成功',
-          description: '分类完成',
+          description: '信息提取完成',
         })
       } else {
         toast({
           title: '错误',
-          description: '分类失败，请稍后重试',
+          description: '信息提取失败，请稍后重试',
           variant: 'destructive',
         })
       }
     } catch (error) {
-      console.error('文本分类失败:', error)
+      console.error('信息提取失败:', error)
       toast({
         title: '错误',
-        description: '分类失败，请检查网络连接',
+        description: '信息提取失败，请检查网络连接',
         variant: 'destructive',
       })
     } finally {
@@ -192,8 +190,8 @@ export default function ClassificationPage() {
     }
   }
 
-  // 批量分类
-  const handleBatchClassify = async () => {
+  // 批量处罚信息提取
+  const handleBatchExtract = async () => {
     if (!uploadedFile) {
       toast({
         title: '错误',
@@ -206,10 +204,9 @@ export default function ClassificationPage() {
     setProcessing(true)
     const formData = new FormData()
     formData.append('file', uploadedFile)
-    formData.append('labels', labelsInput)
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/classification/batch-classify', {
+      const response = await fetch('http://localhost:8000/api/v1/classification/batch-extract-penalty-info', {
         method: 'POST',
         body: formData
       })
@@ -218,7 +215,7 @@ export default function ClassificationPage() {
         const result = await response.json()
         toast({
           title: '成功',
-          description: `批量分类完成，处理了 ${result.processed_count} 条记录`,
+          description: `批量提取完成，处理了 ${result.processed_count} 条记录`,
         })
         
         // 下载结果文件
@@ -228,21 +225,21 @@ export default function ClassificationPage() {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = 'classification_results.csv'
+        a.download = 'penalty_extraction_results.csv'
         a.click()
         window.URL.revokeObjectURL(url)
       } else {
         toast({
           title: '错误',
-          description: '批量分类失败，请稍后重试',
+          description: '批量提取失败，请稍后重试',
           variant: 'destructive',
         })
       }
     } catch (error) {
-      console.error('批量分类失败:', error)
+      console.error('批量提取失败:', error)
       toast({
         title: '错误',
-        description: '批量分类失败，请检查网络连接',
+        description: '批量提取失败，请检查网络连接',
         variant: 'destructive',
       })
     } finally {
@@ -350,11 +347,11 @@ export default function ClassificationPage() {
           </TabsTrigger>
           <TabsTrigger value="classify" className="flex items-center gap-2">
             <Cpu className="h-4 w-4" />
-            文本分类
+            处罚信息提取
           </TabsTrigger>
           <TabsTrigger value="batch" className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
-            批量分类
+            批量提取
           </TabsTrigger>
         </TabsList>
 
@@ -434,16 +431,16 @@ export default function ClassificationPage() {
           </Card>
         </TabsContent>
 
-        {/* Text Classification Tab */}
+        {/* Penalty Info Extraction Tab */}
         <TabsContent value="classify" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Cpu className="h-5 w-5" />
-                文本分类
+                处罚信息提取
               </CardTitle>
               <CardDescription>
-                输入文本内容进行实时分类
+                输入处罚决定书文本，自动提取关键信息
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -451,56 +448,66 @@ export default function ClassificationPage() {
                 <Label htmlFor="text-input">输入文本</Label>
                 <Textarea
                   id="text-input"
-                  placeholder="请输入需要分类的案例文本..."
+                  placeholder="请输入行政处罚决定书文本..."
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
-                  className="min-h-[120px]"
+                  className="min-h-[200px] max-h-[400px] resize-y"
+                  maxLength={10000}
                 />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="labels-input">标签列表</Label>
-                <Input
-                  id="labels-input"
-                  placeholder="输入标签，用逗号分隔"
-                  value={labelsInput}
-                  onChange={(e) => setLabelsInput(e.target.value)}
-                />
+                <div className="flex justify-between items-center text-sm text-muted-foreground mt-1">
+                  <span>支持最多10,000个字符</span>
+                  <span className={textInput.length > 9000 ? "text-orange-500" : textInput.length > 9500 ? "text-red-500" : ""}>
+                    {textInput.length}/10,000
+                  </span>
+                </div>
               </div>
 
               <Button 
-                onClick={handleClassifyText}
+                onClick={handleExtractPenaltyInfo}
                 disabled={processing || !textInput.trim()}
                 className="w-full"
               >
                 {processing ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    分类中...
+                    提取中...
                   </>
                 ) : (
                   <>
                     <Cpu className="mr-2 h-4 w-4" />
-                    开始分类
+                    提取信息
                   </>
                 )}
               </Button>
 
-              {classificationResult && (
+              {extractResult && (
                 <Card className="bg-gray-50">
                   <CardHeader>
-                    <CardTitle className="text-lg">分类结果</CardTitle>
+                    <CardTitle className="text-lg">提取结果</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2">
-                      {classificationResult.labels?.map((label: any, index: number) => (
-                        <div key={index} className="flex items-center justify-between">
-                          <Badge variant="secondary">{label.label}</Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {(label.confidence * 100).toFixed(1)}%
-                          </span>
+                    <div className="space-y-3">
+                      {extractResult.success && extractResult.data && Object.entries(extractResult.data).map(([key, value]: [string, any]) => (
+                        <div key={key} className="flex flex-col space-y-1">
+                          <div className="text-sm font-medium text-gray-700">{key}:</div>
+                          <div className="text-sm text-gray-900 bg-white p-2 rounded border">
+                            {typeof value === 'string' ? value : JSON.stringify(value)}
+                          </div>
                         </div>
                       ))}
+                      {!extractResult.success && extractResult.error && (
+                        <div className="text-red-600 bg-red-50 p-3 rounded border">
+                          错误: {extractResult.error}
+                        </div>
+                      )}
+                      {extractResult.confidence && (
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <span className="text-sm font-medium">置信度:</span>
+                          <Badge variant="outline">
+                            {(extractResult.confidence * 100).toFixed(1)}%
+                          </Badge>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -509,16 +516,16 @@ export default function ClassificationPage() {
           </Card>
         </TabsContent>
 
-        {/* Batch Classification Tab */}
+        {/* Batch Penalty Info Extraction Tab */}
         <TabsContent value="batch" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Upload className="h-5 w-5" />
-                批量分类
+                批量处罚信息提取
               </CardTitle>
               <CardDescription>
-                上传CSV文件进行批量案例分类
+                上传CSV文件进行批量处罚信息提取
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -553,18 +560,8 @@ export default function ClassificationPage() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="batch-labels">标签列表</Label>
-                <Input
-                  id="batch-labels"
-                  placeholder="输入标签，用逗号分隔"
-                  value={labelsInput}
-                  onChange={(e) => setLabelsInput(e.target.value)}
-                />
-              </div>
-
               <Button 
-                onClick={handleBatchClassify}
+                onClick={handleBatchExtract}
                 disabled={processing || !uploadedFile}
                 className="w-full"
               >
@@ -576,7 +573,7 @@ export default function ClassificationPage() {
                 ) : (
                   <>
                     <Upload className="mr-2 h-4 w-4" />
-                    批量分类
+                    批量提取
                   </>
                 )}
               </Button>
