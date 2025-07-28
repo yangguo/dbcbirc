@@ -18,9 +18,19 @@ import {
   BarChart3,
   CheckCircle,
   AlertCircle,
-  Loader2
+  Loader2,
+  Table as TableIcon,
+  Code
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 interface ClassificationStats {
   total_cases: number
@@ -54,6 +64,7 @@ export default function ClassificationPage() {
   })
   const [textInput, setTextInput] = useState('')
   const [extractResult, setExtractResult] = useState<any>(null)
+  const [displayMode, setDisplayMode] = useState<'json' | 'table'>('json')
 
   // 获取分类统计数据
   useEffect(() => {
@@ -483,32 +494,80 @@ export default function ClassificationPage() {
               {extractResult && (
                 <Card className="bg-gray-50">
                   <CardHeader>
-                    <CardTitle className="text-lg">提取结果</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg">提取结果</CardTitle>
+                      <div className="flex gap-2">
+                        <Button
+                          variant={displayMode === 'json' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setDisplayMode('json')}
+                          className="flex items-center gap-1"
+                        >
+                          <Code className="h-4 w-4" />
+                          JSON
+                        </Button>
+                        <Button
+                          variant={displayMode === 'table' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setDisplayMode('table')}
+                          className="flex items-center gap-1"
+                        >
+                          <TableIcon className="h-4 w-4" />
+                          表格
+                        </Button>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-3">
-                      {extractResult.success && extractResult.data && Object.entries(extractResult.data).map(([key, value]: [string, any]) => (
-                        <div key={key} className="flex flex-col space-y-1">
-                          <div className="text-sm font-medium text-gray-700">{key}:</div>
-                          <div className="text-sm text-gray-900 bg-white p-2 rounded border">
-                            {typeof value === 'string' ? value : JSON.stringify(value)}
+                    {!extractResult.success && extractResult.error && (
+                      <div className="text-red-600 bg-red-50 p-3 rounded border mb-4">
+                        错误: {extractResult.error}
+                      </div>
+                    )}
+                    
+                    {extractResult.success && extractResult.data && (
+                      <div className="space-y-4">
+                        {displayMode === 'json' && (
+                          <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-auto">
+                            <pre>{JSON.stringify(extractResult.data, null, 2)}</pre>
                           </div>
-                        </div>
-                      ))}
-                      {!extractResult.success && extractResult.error && (
-                        <div className="text-red-600 bg-red-50 p-3 rounded border">
-                          错误: {extractResult.error}
-                        </div>
-                      )}
-                      {extractResult.confidence && (
-                        <div className="flex items-center justify-between pt-2 border-t">
-                          <span className="text-sm font-medium">置信度:</span>
-                          <Badge variant="outline">
-                            {(extractResult.confidence * 100).toFixed(1)}%
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
+                        )}
+                        
+                        {displayMode === 'table' && (
+                          <div className="border rounded-lg">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-1/3">字段</TableHead>
+                                  <TableHead>值</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {Object.entries(extractResult.data).map(([key, value]: [string, any]) => (
+                                  <TableRow key={key}>
+                                    <TableCell className="font-medium">{key}</TableCell>
+                                    <TableCell className="max-w-md">
+                                      <div className="break-words">
+                                        {typeof value === 'string' ? value : JSON.stringify(value)}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                        
+                        {extractResult.confidence && (
+                          <div className="flex items-center justify-between pt-2 border-t">
+                            <span className="text-sm font-medium">置信度:</span>
+                            <Badge variant="outline">
+                              {(extractResult.confidence * 100).toFixed(1)}%
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
