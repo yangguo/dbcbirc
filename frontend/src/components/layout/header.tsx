@@ -2,6 +2,7 @@
 
 import { Building2, Bell, User, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Header() {
   return (
@@ -24,6 +25,7 @@ export function Header() {
         </div>
         
         <div className="ml-auto flex items-center space-x-2">
+          <ThemeToggle />
           <Button 
             variant="ghost" 
             size="icon" 

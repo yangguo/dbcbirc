@@ -3,6 +3,7 @@
 import dynamicImport from 'next/dynamic'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { TrendingUp, BarChart3, MapPin, Sparkles, Activity } from 'lucide-react'
+import { DarkModeDemo } from '@/components/dark-mode-demo'
 
 export const dynamic = 'force-dynamic'
 
@@ -121,7 +122,7 @@ export default function HomePage() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
         <Card className="card-hover bg-gradient-to-br from-orange-500/10 to-red-500/10 border-orange-200/50">
           <CardContent className="p-6">
             <div className="flex items-center gap-3">
@@ -163,6 +164,8 @@ export default function HomePage() {
             </div>
           </CardContent>
         </Card>
+
+        <DarkModeDemo />
       </div>
     </div>
   )
