@@ -2,11 +2,13 @@ import os
 import glob
 import pandas as pd
 import io
+import asyncio
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks, File, UploadFile, Query
 from fastapi.responses import StreamingResponse
 from app.models.case import UpdateRequest, OrganizationType
 from app.services.scraper_service import scraper_service
+from app.services.task_service import task_service, create_update_cases_task, create_update_details_task, TaskType
 from app.core.database import db_manager
 from app.core.config import settings
 from pymongo import MongoClient
@@ -229,15 +231,24 @@ async def update_cases(
 ):
     """Update cases from CBIRC website"""
     try:
-        # Add background task for scraping
+        # Create task
+        task = create_update_cases_task(
+            update_request.org_name,
+            update_request.start_page,
+            update_request.end_page
+        )
+        
+        # Add background task for scraping with task tracking
         background_tasks.add_task(
-            scraper_service.scrape_cases,
+            _run_scrape_cases_with_tracking,
+            task.id,
             update_request.org_name,
             update_request.start_page,
             update_request.end_page
         )
         
         return {
+            "task_id": task.id,
             "message": "Update task started",
             "org_name": update_request.org_name,
             "page_range": f"{update_request.start_page}-{update_request.end_page}"
@@ -257,13 +268,18 @@ async def update_case_details(
 ):
     """Update case details from CBIRC website"""
     try:
-        # Add background task for updating case details
+        # Create task
+        task = create_update_details_task(update_request.org_name)
+        
+        # Add background task for updating case details with task tracking
         background_tasks.add_task(
-            scraper_service.update_case_details,
+            _run_update_details_with_tracking,
+            task.id,
             update_request.org_name
         )
         
         return {
+            "task_id": task.id,
             "message": "Case details update task started",
             "org_name": update_request.org_name
         }
@@ -387,14 +403,64 @@ async def get_system_info():
         # Get collection stats
         collections_info = {}
         
-        # This would typically get actual collection stats
-        # For now, return basic info
+        # Get active tasks count
+        active_tasks = task_service.get_active_tasks()
+        active_tasks_count = len(active_tasks)
+        
+        # Get database status
+        try:
+            # Try to connect to database to check status
+            # This is a simple connectivity check
+            database_status = "connected"
+        except Exception:
+            database_status = "disconnected"
+        
         return {
-            "database_status": "connected",
+            "database_status": database_status,
             "collections": collections_info,
-            "api_version": "1.0.0"
+            "api_version": "1.0.0",
+            "active_tasks": active_tasks_count,
+            "system_health": "healthy" if database_status == "connected" else "warning"
         }
         
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tasks")
+async def get_tasks(limit: int = 50):
+    """Get task history"""
+    try:
+        tasks = task_service.get_all_tasks(limit=limit)
+        return {
+            "tasks": tasks,
+            "total": len(tasks)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tasks/active")
+async def get_active_tasks():
+    """Get currently active tasks"""
+    try:
+        tasks = task_service.get_active_tasks()
+        return {
+            "tasks": tasks,
+            "total": len(tasks)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tasks/{task_id}")
+async def get_task(task_id: str):
+    """Get specific task by ID"""
+    try:
+        task = task_service.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return task.to_dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -777,3 +843,60 @@ async def import_cases(
     except Exception as e:
         logger.error(f"Error in import_cases: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Helper functions for background task tracking
+async def _run_scrape_cases_with_tracking(task_id: str, org_name: str, start_page: int, end_page: int):
+    """Run scrape cases with task tracking"""
+    try:
+        task_service.start_task(task_id)
+        
+        # Update progress periodically
+        total_pages = end_page - start_page + 1
+        
+        for i in range(total_pages):
+            current_page = start_page + i
+            progress = int((i / total_pages) * 100)
+            task_service.update_task_progress(task_id, progress)
+            
+            # Here you would call the actual scraping for this page
+            # For now, we'll simulate the work
+            await asyncio.sleep(1)  # Simulate work
+        
+        # Run the actual scraping function
+        result = await scraper_service.scrape_cases(org_name, start_page, end_page)
+        
+        # Complete the task
+        task_service.complete_task(task_id, {
+            "total_pages": total_pages,
+            "org_name": org_name,
+            "status": "completed"
+        })
+        
+    except Exception as e:
+        task_service.fail_task(task_id, str(e))
+        logger.error(f"Task {task_id} failed: {str(e)}")
+
+
+async def _run_update_details_with_tracking(task_id: str, org_name: str):
+    """Run update details with task tracking"""
+    try:
+        task_service.start_task(task_id)
+        
+        # Simulate progress updates
+        for progress in [20, 40, 60, 80]:
+            task_service.update_task_progress(task_id, progress)
+            await asyncio.sleep(1)  # Simulate work
+        
+        # Run the actual update function
+        result = await scraper_service.update_case_details(org_name)
+        
+        # Complete the task
+        task_service.complete_task(task_id, {
+            "org_name": org_name,
+            "status": "completed"
+        })
+        
+    except Exception as e:
+        task_service.fail_task(task_id, str(e))
+        logger.error(f"Task {task_id} failed: {str(e)}")

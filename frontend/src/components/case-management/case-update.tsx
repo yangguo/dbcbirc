@@ -40,42 +40,14 @@ export function CaseUpdate() {
 
   const { toast } = useToast()
 
-  // Mock update tasks data
-  const updateTasks: UpdateTask[] = [
-    {
-      id: 'task-001',
-      type: 'cases',
-      orgName: '银保监会机关',
-      startPage: 1,
-      endPage: 5,
-      status: 'completed',
-      progress: 100,
-      createdAt: '2024-01-15 14:30',
-      completedAt: '2024-01-15 14:45',
-      results: { total: 150, updated: 120, skipped: 30 }
-    },
-    {
-      id: 'task-002',
-      type: 'details',
-      orgName: '银保监局本级',
-      startPage: 1,
-      endPage: 3,
-      status: 'running',
-      progress: 65,
-      createdAt: '2024-01-15 14:25'
-    },
-    {
-      id: 'task-003',
-      type: 'cases',
-      orgName: '银保监分局本级',
-      startPage: 1,
-      endPage: 2,
-      status: 'failed',
-      progress: 0,
-      createdAt: '2024-01-15 14:20',
-      error: '网络连接超时'
-    }
-  ]
+  // Get real tasks from API instead of mock data
+  const { data: tasksData, isLoading: tasksLoading } = useQuery({
+    queryKey: ['admin-tasks'],
+    queryFn: () => apiClient.getTasks(20),
+    refetchInterval: 5000, // Refresh every 5 seconds
+  })
+
+  const updateTasks = tasksData?.tasks || []
 
   // Get system info
   const { data: systemInfo, isLoading: systemLoading } = useQuery({
@@ -443,9 +415,9 @@ export function CaseUpdate() {
                       {task.type === 'cases' ? '案例列表' : '案例详情'}
                     </Badge>
                   </TableCell>
-                  <TableCell>{task.orgName}</TableCell>
+                  <TableCell>{task.org_name || task.orgName}</TableCell>
                   <TableCell>
-                    {task.type === 'cases' ? `${task.startPage}-${task.endPage}页` : '全部'}
+                    {task.type === 'cases' ? `${task.start_page || task.startPage}-${task.end_page || task.endPage}页` : '全部'}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -468,11 +440,11 @@ export function CaseUpdate() {
                         <div>更新: {task.results.updated}</div>
                         <div>跳过: {task.results.skipped}</div>
                       </div>
-                    ) : task.error ? (
+                    ) : task.error_message || task.error ? (
                       <Badge variant="destructive">错误</Badge>
                     ) : '-'}
                   </TableCell>
-                  <TableCell className="text-sm">{task.createdAt}</TableCell>
+                  <TableCell className="text-sm">{task.created_at || task.createdAt}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

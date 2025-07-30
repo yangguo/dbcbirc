@@ -107,6 +107,21 @@ class ApiClient {
     })
   }
 
+  // Admin - Get Tasks History
+  async getTasks(limit = 50) {
+    return this.request(`/api/v1/admin/tasks?limit=${limit}`)
+  }
+
+  // Admin - Get Active Tasks
+  async getActiveTasks() {
+    return this.request('/api/v1/admin/tasks/active')
+  }
+
+  // Admin - Get Specific Task
+  async getTask(taskId: string) {
+    return this.request(`/api/v1/admin/tasks/${taskId}`)
+  }
+
   // Export Cases CSV
   async exportCasesCSV(): Promise<Blob> {
     const response = await fetch(`${this.baseUrl}/api/v1/analytics/export/csv`)

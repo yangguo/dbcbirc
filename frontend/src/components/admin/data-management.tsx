@@ -31,6 +31,13 @@ export function DataManagement() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
+  // Query for active tasks
+  const { data: activeTasksData } = useQuery({
+    queryKey: ['active-tasks'],
+    queryFn: () => apiClient.getActiveTasks(),
+    refetchInterval: 3000, // Refresh every 3 seconds
+  })
+
   // Query for case summary by organization
   const { data: caseSummary, isLoading: summaryLoading } = useQuery({
     queryKey: ['caseSummary', updateForm.orgName],
@@ -339,35 +346,60 @@ export function DataManagement() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              <div className="flex justify-between items-center p-3 border rounded-lg">
-                <div>
-                  <div className="font-medium text-sm">案例列表</div>
-                  <div className="text-xs text-muted-foreground">{updateForm.orgName}</div>
+              {(activeTasksData as any)?.tasks?.length > 0 ? (
+                (activeTasksData as any).tasks.map((task: any) => (
+                  <div key={task.id} className="flex justify-between items-center p-3 border rounded-lg">
+                    <div>
+                      <div className="font-medium text-sm">
+                        {task.type === 'cases' ? '案例列表' : '案例详情'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {task.org_name} - {task.description}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs">{task.progress}%</div>
+                      <Badge variant={task.status === 'running' ? "secondary" : "default"}>
+                        {task.status === 'running' ? "运行中" : 
+                         task.status === 'pending' ? "待开始" : 
+                         task.status === 'completed' ? "已完成" : "失败"}
+                      </Badge>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center p-3 border rounded-lg">
+                    <div>
+                      <div className="font-medium text-sm">案例列表</div>
+                      <div className="text-xs text-muted-foreground">{updateForm.orgName}</div>
+                    </div>
+                    <Badge variant={updateCasesMutation.isPending ? "secondary" : "default"}>
+                      {updateCasesMutation.isPending ? "更新中" : "待更新"}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex justify-between items-center p-3 border rounded-lg">
+                    <div>
+                      <div className="font-medium text-sm">案例详情</div>
+                      <div className="text-xs text-muted-foreground">{updateForm.orgName}</div>
+                    </div>
+                    <Badge variant={updateCaseDetailsMutation.isPending ? "secondary" : "default"}>
+                      {updateCaseDetailsMutation.isPending ? "更新中" : "待更新"}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex justify-between items-center p-3 border rounded-lg">
+                    <div>
+                      <div className="font-medium text-sm">数据缓存</div>
+                      <div className="text-xs text-muted-foreground">系统缓存</div>
+                    </div>
+                    <Badge variant={refreshDataMutation.isPending ? "secondary" : "default"}>
+                      {refreshDataMutation.isPending ? "刷新中" : "正常"}
+                    </Badge>
+                  </div>
                 </div>
-                <Badge variant={updateCasesMutation.isPending ? "secondary" : "default"}>
-                  {updateCasesMutation.isPending ? "更新中" : "待更新"}
-                </Badge>
-              </div>
-              
-              <div className="flex justify-between items-center p-3 border rounded-lg">
-                <div>
-                  <div className="font-medium text-sm">案例详情</div>
-                  <div className="text-xs text-muted-foreground">{updateForm.orgName}</div>
-                </div>
-                <Badge variant={updateCaseDetailsMutation.isPending ? "secondary" : "default"}>
-                  {updateCaseDetailsMutation.isPending ? "更新中" : "待更新"}
-                </Badge>
-              </div>
-              
-              <div className="flex justify-between items-center p-3 border rounded-lg">
-                <div>
-                  <div className="font-medium text-sm">数据缓存</div>
-                  <div className="text-xs text-muted-foreground">系统缓存</div>
-                </div>
-                <Badge variant={refreshDataMutation.isPending ? "secondary" : "default"}>
-                  {refreshDataMutation.isPending ? "刷新中" : "正常"}
-                </Badge>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>
