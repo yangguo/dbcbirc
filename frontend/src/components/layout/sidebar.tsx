@@ -12,7 +12,9 @@ import {
   Download,
   RefreshCw,
   Zap,
-  Tags
+  Tags,
+  Database,
+  FolderOpen
 } from 'lucide-react'
 
 const navigation = [
@@ -46,6 +48,13 @@ const navigation = [
   },
   {
     name: '案例管理',
+    href: '/case-management',
+    icon: FolderOpen,
+    gradient: 'from-emerald-500 to-green-600',
+    bgGradient: 'from-emerald-500/10 to-green-600/10',
+  },
+  {
+    name: '系统管理',
     href: '/admin',
     icon: Settings,
     gradient: 'from-purple-500 to-pink-600',

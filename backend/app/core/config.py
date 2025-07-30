@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     MONGO_DB_URL: str = os.getenv("MONGO_DB_URL", "mongodb://localhost:27017/")
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017/")
     DATABASE_NAME: str = "cbirc_analysis"
+    DISABLE_DATABASE: bool = os.getenv("DISABLE_DATABASE", "false").lower() in ("true", "1", "yes")
     
     # External APIs
     DIFY_API_KEY: str = os.getenv("DIFY_API_KEY", "")

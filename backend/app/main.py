@@ -9,7 +9,11 @@ from app.core.database import db_manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    await db_manager.connect_db()
+    try:
+        await db_manager.connect_db()
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+        print("Application will continue without database")
     yield
     # Shutdown
     await db_manager.close_db()

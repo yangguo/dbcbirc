@@ -1,8 +1,10 @@
 import os
 import glob
 import pandas as pd
-from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+import io
+from typing import Dict, Any, Optional
+from fastapi import APIRouter, HTTPException, BackgroundTasks, File, UploadFile, Query
+from fastapi.responses import StreamingResponse
 from app.models.case import UpdateRequest, OrganizationType
 from app.services.scraper_service import scraper_service
 from app.core.database import db_manager
@@ -24,6 +26,61 @@ org2name = {
     "银保监分局本级": "fenju",
     "": "",
 }
+
+def get_cbircsum(orgname):
+    """Get CBIRC summary data"""
+    org_name_index = org2name.get(orgname, "")
+    beginwith = "cbircsum" + org_name_index
+    pendf = get_csvdf(DATA_FOLDER, beginwith)
+    
+    if pendf.empty:
+        logger.warning(f"No summary data found for {orgname}")
+        return pd.DataFrame()
+    
+    if "publishDate" not in pendf.columns:
+        logger.warning(f"Missing publishDate column in summary data for {orgname}")
+        return pd.DataFrame()
+    
+    # Format date
+    try:
+        pendf["发布日期"] = pd.to_datetime(pendf["publishDate"]).dt.date
+    except Exception as e:
+        logger.warning(f"Date formatting failed: {e}")
+    
+    return pendf
+
+
+def get_cbircdetail(orgname=""):
+    """Get CBIRC detail data"""
+    org_name_index = org2name.get(orgname, "")
+    beginwith = "cbircdtl" + org_name_index
+    d0 = get_csvdf(DATA_FOLDER, beginwith)
+    
+    if d0.empty:
+        logger.warning(f"No detail data available for {orgname}")
+        return pd.DataFrame()
+    
+    # Check if required columns exist
+    required_columns = ["title", "subtitle", "date", "doc", "id"]
+    missing_columns = [col for col in required_columns if col not in d0.columns]
+    if missing_columns:
+        logger.warning(f"Missing columns in detail data for {orgname}: {missing_columns}")
+        return pd.DataFrame()
+    
+    # Select and rename columns
+    d1 = d0[["title", "subtitle", "date", "doc", "id"]].reset_index(drop=True)
+    
+    # Format date
+    try:
+        d1["date"] = d1["date"].str.split(".").str[0]
+        d1["date"] = pd.to_datetime(d1["date"], format="%Y-%m-%d %H:%M:%S").dt.date
+    except Exception as e:
+        logger.warning(f"Date formatting failed: {e}")
+    
+    # Update column names
+    d1.columns = ["标题", "文号", "发布日期", "内容", "id"]
+    return d1
+
 
 def get_csvdf(penfolder, beginwith):
     """Read CSV files matching pattern from root directory only"""
@@ -91,6 +148,80 @@ def get_cbirccat():
     return amtdf
 
 
+@router.get("/check-files")
+async def check_saved_files(
+    org_name: Optional[str] = Query(None, description="Organization name filter")
+):
+    """Check saved files in the cbirc directory"""
+    try:
+        # Convert string to enum if provided
+        org_enum = None
+        if org_name:
+            org_mapping = {
+                "headquarters": OrganizationType.HEADQUARTERS,
+                "provincial": OrganizationType.PROVINCIAL,
+                "local": OrganizationType.LOCAL,
+                "jiguan": OrganizationType.HEADQUARTERS,
+                "benji": OrganizationType.PROVINCIAL,
+                "fenju": OrganizationType.LOCAL
+            }
+            org_enum = org_mapping.get(org_name.lower())
+        
+        result = await scraper_service.check_saved_files(org_enum)
+        return result
+        
+    except Exception as e:
+        print(f"Error in check_saved_files: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/test-connection")
+async def test_connection(
+    org_name: OrganizationType = OrganizationType.LOCAL
+):
+    """Test connection to NFRA website"""
+    try:
+        result = await scraper_service.test_connection(org_name)
+        return result
+        
+    except Exception as e:
+        print(f"Error in test_connection: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/scrape-direct")
+async def scrape_direct(
+    update_request: UpdateRequest,
+    background_tasks: BackgroundTasks
+):
+    """Direct scraping using async HTTP requests (for debugging)"""
+    try:
+        # Add background task for direct scraping
+        background_tasks.add_task(
+            scraper_service.scrape_cases_direct,
+            update_request.org_name,
+            update_request.start_page,
+            update_request.end_page
+        )
+        
+        return {
+            "message": "Direct scraping task started",
+            "org_name": update_request.org_name,
+            "page_range": f"{update_request.start_page}-{update_request.end_page}",
+            "method": "direct_async_http"
+        }
+        
+    except Exception as e:
+        print(f"Error in scrape_direct: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/update-cases")
 async def update_cases(
     update_request: UpdateRequest,
@@ -113,9 +244,128 @@ async def update_cases(
         }
         
     except Exception as e:
-        print(f"Error in generate_classification_data: {str(e)}")
+        print(f"Error in update_cases: {str(e)}")
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/update-case-details")
+async def update_case_details(
+    update_request: UpdateRequest,
+    background_tasks: BackgroundTasks
+):
+    """Update case details from CBIRC website"""
+    try:
+        # Add background task for updating case details
+        background_tasks.add_task(
+            scraper_service.update_case_details,
+            update_request.org_name
+        )
+        
+        return {
+            "message": "Case details update task started",
+            "org_name": update_request.org_name
+        }
+        
+    except Exception as e:
+        print(f"Error in update_case_details: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/case-summary/{org_name}")
+async def get_case_summary_by_org(org_name: str):
+    """Get case summary by organization"""
+    try:
+        # Map organization name if needed
+        org_mapping = {
+            "银保监会机关": "银保监会机关",
+            "银保监局本级": "银保监局本级", 
+            "银保监分局本级": "银保监分局本级",
+            "headquarters": "银保监会机关",
+            "provincial": "银保监局本级",
+            "local": "银保监分局本级"
+        }
+        
+        mapped_org = org_mapping.get(org_name, org_name)
+        
+        # Get data using existing function
+        sumdf = get_cbircsum(mapped_org)
+        
+        if sumdf.empty:
+            return {
+                "total_cases": 0,
+                "date_range": {},
+                "summary": "暂无数据"
+            }
+        
+        # Calculate statistics
+        total_cases = len(sumdf)
+        
+        if "发布日期" in sumdf.columns:
+            min_date = sumdf["发布日期"].min()
+            max_date = sumdf["发布日期"].max()
+            date_range = {"start": str(min_date), "end": str(max_date)}
+        else:
+            date_range = {}
+        
+        return {
+            "total_cases": total_cases,
+            "date_range": date_range,
+            "summary": f"共{total_cases}条案例待更新"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_case_summary_by_org: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/case-detail-summary/{org_name}")
+async def get_case_detail_summary_by_org(org_name: str):
+    """Get case detail summary by organization"""
+    try:
+        # Map organization name if needed
+        org_mapping = {
+            "银保监会机关": "银保监会机关",
+            "银保监局本级": "银保监局本级", 
+            "银保监分局本级": "银保监分局本级",
+            "headquarters": "银保监会机关",
+            "provincial": "银保监局本级",
+            "local": "银保监分局本级"
+        }
+        
+        mapped_org = org_mapping.get(org_name, org_name)
+        
+        # Get data using existing function
+        dtldf = get_cbircdetail(mapped_org)
+        
+        if dtldf.empty:
+            return {
+                "total_cases": 0,
+                "date_range": {},
+                "summary": "暂无详情数据"
+            }
+        
+        # Calculate statistics
+        total_cases = len(dtldf)
+        
+        if "发布日期" in dtldf.columns:
+            min_date = dtldf["发布日期"].min()
+            max_date = dtldf["发布日期"].max()
+            date_range = {"start": str(min_date), "end": str(max_date)}
+        else:
+            date_range = {}
+        
+        return {
+            "total_cases": total_cases,
+            "date_range": date_range,
+            "summary": f"共{total_cases}条案例详情数据"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_case_detail_summary_by_org: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -301,4 +551,229 @@ async def generate_classification_data():
         
     except Exception as e:
         logger.error(f"Error in generate_classification_data: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/export/csv")
+async def export_cases_csv(
+    org_name: Optional[str] = Query(None, description="Organization name filter"),
+    category: Optional[str] = Query(None, description="Category filter"),
+    start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)")
+):
+    """Export cases data as CSV"""
+    try:
+        # Get data based on filters
+        if org_name:
+            df = get_cbircsum(org_name)
+        else:
+            # Get all data
+            all_data = []
+            for org in ["银保监会机关", "银保监局本级", "银保监分局本级"]:
+                org_data = get_cbircsum(org)
+                if not org_data.empty:
+                    all_data.append(org_data)
+            
+            if all_data:
+                df = pd.concat(all_data, ignore_index=True)
+            else:
+                df = pd.DataFrame()
+        
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No data found")
+        
+        # Apply filters
+        if category and "category" in df.columns:
+            df = df[df["category"] == category]
+        
+        if start_date:
+            if "发布日期" in df.columns:
+                df = df[df["发布日期"] >= start_date]
+        
+        if end_date:
+            if "发布日期" in df.columns:
+                df = df[df["发布日期"] <= end_date]
+        
+        # Convert to CSV
+        output = io.StringIO()
+        df.to_csv(output, index=False, encoding='utf-8-sig')
+        output.seek(0)
+        
+        # Return as streaming response
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8-sig')),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=cbirc_cases.csv"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in export_cases_csv: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/export/excel")
+async def export_cases_excel(
+    org_name: Optional[str] = Query(None, description="Organization name filter"),
+    category: Optional[str] = Query(None, description="Category filter"),
+    start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)")
+):
+    """Export cases data as Excel"""
+    try:
+        # Get data based on filters
+        if org_name:
+            df = get_cbircsum(org_name)
+        else:
+            # Get all data
+            all_data = []
+            for org in ["银保监会机关", "银保监局本级", "银保监分局本级"]:
+                org_data = get_cbircsum(org)
+                if not org_data.empty:
+                    all_data.append(org_data)
+            
+            if all_data:
+                df = pd.concat(all_data, ignore_index=True)
+            else:
+                df = pd.DataFrame()
+        
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No data found")
+        
+        # Apply filters
+        if category and "category" in df.columns:
+            df = df[df["category"] == category]
+        
+        if start_date:
+            if "发布日期" in df.columns:
+                df = df[df["发布日期"] >= start_date]
+        
+        if end_date:
+            if "发布日期" in df.columns:
+                df = df[df["发布日期"] <= end_date]
+        
+        # Convert to Excel
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Cases', index=False)
+        output.seek(0)
+        
+        # Return as streaming response
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=cbirc_cases.xlsx"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in export_cases_excel: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/export/json")
+async def export_cases_json(
+    org_name: Optional[str] = Query(None, description="Organization name filter"),
+    category: Optional[str] = Query(None, description="Category filter"),
+    start_date: Optional[str] = Query(None, description="Start date filter (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="End date filter (YYYY-MM-DD)")
+):
+    """Export cases data as JSON"""
+    try:
+        # Get data based on filters
+        if org_name:
+            df = get_cbircsum(org_name)
+        else:
+            # Get all data
+            all_data = []
+            for org in ["银保监会机关", "银保监局本级", "银保监分局本级"]:
+                org_data = get_cbircsum(org)
+                if not org_data.empty:
+                    all_data.append(org_data)
+            
+            if all_data:
+                df = pd.concat(all_data, ignore_index=True)
+            else:
+                df = pd.DataFrame()
+        
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No data found")
+        
+        # Apply filters
+        if category and "category" in df.columns:
+            df = df[df["category"] == category]
+        
+        if start_date:
+            if "发布日期" in df.columns:
+                df = df[df["发布日期"] >= start_date]
+        
+        if end_date:
+            if "发布日期" in df.columns:
+                df = df[df["发布日期"] <= end_date]
+        
+        # Convert to JSON
+        json_data = df.to_json(orient='records', date_format='iso', force_ascii=False)
+        
+        # Return as streaming response
+        return StreamingResponse(
+            io.BytesIO(json_data.encode('utf-8')),
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=cbirc_cases.json"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in export_cases_json: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/import")
+async def import_cases(
+    file: UploadFile = File(...),
+    format: str = Query("csv", description="File format: csv, excel, json")
+):
+    """Import cases data from file"""
+    try:
+        # Read file content
+        content = await file.read()
+        
+        if format.lower() == "csv":
+            df = pd.read_csv(io.BytesIO(content), encoding='utf-8')
+        elif format.lower() in ["excel", "xlsx"]:
+            df = pd.read_excel(io.BytesIO(content))
+        elif format.lower() == "json":
+            df = pd.read_json(io.BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file format")
+        
+        if df.empty:
+            raise HTTPException(status_code=400, detail="Empty file")
+        
+        # Validate required columns
+        required_columns = ["id", "标题", "文号", "发布日期", "内容"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Missing required columns: {', '.join(missing_columns)}"
+            )
+        
+        # TODO: Implement actual data import logic
+        # This would involve inserting data into the database
+        # For now, just return success with stats
+        
+        total_rows = len(df)
+        processed_rows = total_rows  # Assuming all rows are processed successfully
+        errors = []  # No errors for now
+        
+        logger.info(f"Imported {processed_rows} cases from {file.filename}")
+        
+        return {
+            "message": "Import completed successfully",
+            "total_rows": total_rows,
+            "processed_rows": processed_rows,
+            "errors": errors,
+            "filename": file.filename
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in import_cases: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

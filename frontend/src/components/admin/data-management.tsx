@@ -10,7 +10,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api'
-import { Download, Upload, RefreshCw, Database, AlertTriangle } from 'lucide-react'
+import { Download, Upload, RefreshCw, Database, AlertTriangle, FileText, List } from 'lucide-react'
+
+interface CaseSummaryData {
+  total_cases: number
+  date_range?: {
+    start: string
+    end: string
+  }
+  summary?: string
+}
 
 export function DataManagement() {
   const [updateForm, setUpdateForm] = useState({
@@ -22,20 +31,54 @@ export function DataManagement() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
 
+  // Query for case summary by organization
+  const { data: caseSummary, isLoading: summaryLoading } = useQuery({
+    queryKey: ['caseSummary', updateForm.orgName],
+    queryFn: () => apiClient.getCaseSummaryByOrg(updateForm.orgName),
+    refetchInterval: 5000, // Refresh every 5 seconds
+  })
+
+  // Query for case detail summary by organization
+  const { data: caseDetailSummary, isLoading: detailSummaryLoading } = useQuery({
+    queryKey: ['caseDetailSummary', updateForm.orgName],
+    queryFn: () => apiClient.getCaseDetailSummaryByOrg(updateForm.orgName),
+    refetchInterval: 5000, // Refresh every 5 seconds
+  })
+
   const updateCasesMutation = useMutation({
     mutationFn: ({ orgName, startPage, endPage }: { orgName: string; startPage: number; endPage: number }) =>
       apiClient.updateCases(orgName, startPage, endPage),
     onSuccess: () => {
       toast({
         title: '更新任务已启动',
-        description: '数据更新任务已在后台开始执行',
+        description: '案例列表更新任务已在后台开始执行',
       })
-      // Update task started successfully
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['caseSummary'] })
     },
     onError: (error) => {
       toast({
         title: '更新失败',
-        description: '启动数据更新任务失败，请重试',
+        description: '启动案例列表更新任务失败，请重试',
+        variant: 'destructive',
+      })
+    },
+  })
+
+  const updateCaseDetailsMutation = useMutation({
+    mutationFn: (orgName: string) => apiClient.updateCaseDetails(orgName),
+    onSuccess: () => {
+      toast({
+        title: '详情更新任务已启动',
+        description: '案例详情更新任务已在后台开始执行',
+      })
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['caseDetailSummary'] })
+    },
+    onError: (error) => {
+      toast({
+        title: '详情更新失败',
+        description: '启动案例详情更新任务失败，请重试',
         variant: 'destructive',
       })
     },
@@ -67,7 +110,9 @@ export function DataManagement() {
     })
   }
 
-
+  const handleUpdateCaseDetails = () => {
+    updateCaseDetailsMutation.mutate(updateForm.orgName)
+  }
 
   const handleExportData = async () => {
     try {
@@ -96,12 +141,15 @@ export function DataManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>数据更新</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <List className="h-5 w-5" />
+              案例列表更新
+            </CardTitle>
             <CardDescription>
-              从CBIRC官网更新最新的处罚案例数据
+              从CBIRC官网更新案例列表数据
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -147,22 +195,81 @@ export function DataManagement() {
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <Button 
-                onClick={handleUpdateCases}
-                disabled={updateCasesMutation.isPending}
-                className="flex-1"
-              >
-                {updateCasesMutation.isPending ? (
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4 mr-2" />
+            <Button 
+              onClick={handleUpdateCases}
+              disabled={updateCasesMutation.isPending}
+              className="w-full"
+            >
+              {updateCasesMutation.isPending ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <List className="h-4 w-4 mr-2" />
+              )}
+              更新列表
+            </Button>
+
+            {/* Display case summary info */}
+            {caseSummary && (
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span>当前案例数：</span>
+                  <Badge variant="outline">{(caseSummary as CaseSummaryData).total_cases}</Badge>
+                </div>
+                {(caseSummary as CaseSummaryData).date_range?.start && (
+                  <div className="flex justify-between">
+                    <span>日期范围：</span>
+                    <span className="text-xs">{(caseSummary as CaseSummaryData).date_range.start} - {(caseSummary as CaseSummaryData).date_range.end}</span>
+                  </div>
                 )}
-                开始更新
-              </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              案例详情更新
+            </CardTitle>
+            <CardDescription>
+              更新选定机构的案例详情数据
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="text-sm text-muted-foreground">
+              <p>为 <strong>{updateForm.orgName}</strong> 更新案例详情信息。</p>
+              <p className="mt-2">此操作将获取案例的完整内容、处罚决定等详细信息。</p>
             </div>
 
+            <Button 
+              onClick={handleUpdateCaseDetails}
+              disabled={updateCaseDetailsMutation.isPending}
+              className="w-full"
+            >
+              {updateCaseDetailsMutation.isPending ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4 mr-2" />
+              )}
+              更新详情
+            </Button>
 
+            {/* Display case detail summary info */}
+            {caseDetailSummary && (
+              <div className="text-sm space-y-1">
+                <div className="flex justify-between">
+                  <span>详情案例数：</span>
+                  <Badge variant="outline">{(caseDetailSummary as CaseSummaryData).total_cases}</Badge>
+                </div>
+                {(caseDetailSummary as CaseSummaryData).date_range?.start && (
+                  <div className="flex justify-between">
+                    <span>日期范围：</span>
+                    <span className="text-xs">{(caseDetailSummary as CaseSummaryData).date_range.start} - {(caseDetailSummary as CaseSummaryData).date_range.end}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -211,8 +318,6 @@ export function DataManagement() {
               刷新数据缓存
             </Button>
 
-
-
             <Button variant="outline" className="w-full">
               <Database className="h-4 w-4 mr-2" />
               重建数据索引
@@ -227,35 +332,41 @@ export function DataManagement() {
 
         <Card>
           <CardHeader>
-            <CardTitle>更新历史</CardTitle>
+            <CardTitle>更新状态</CardTitle>
             <CardDescription>
-              最近的数据更新记录
+              实时监控更新任务进度
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <div className="flex justify-between items-center p-3 border rounded-lg">
                 <div>
-                  <div className="font-medium text-sm">银保监会机关</div>
-                  <div className="text-xs text-muted-foreground">2024-01-15 14:30</div>
+                  <div className="font-medium text-sm">案例列表</div>
+                  <div className="text-xs text-muted-foreground">{updateForm.orgName}</div>
                 </div>
-                <Badge variant="default">成功</Badge>
+                <Badge variant={updateCasesMutation.isPending ? "secondary" : "default"}>
+                  {updateCasesMutation.isPending ? "更新中" : "待更新"}
+                </Badge>
               </div>
               
               <div className="flex justify-between items-center p-3 border rounded-lg">
                 <div>
-                  <div className="font-medium text-sm">银保监局本级</div>
-                  <div className="text-xs text-muted-foreground">2024-01-15 10:15</div>
+                  <div className="font-medium text-sm">案例详情</div>
+                  <div className="text-xs text-muted-foreground">{updateForm.orgName}</div>
                 </div>
-                <Badge variant="default">成功</Badge>
+                <Badge variant={updateCaseDetailsMutation.isPending ? "secondary" : "default"}>
+                  {updateCaseDetailsMutation.isPending ? "更新中" : "待更新"}
+                </Badge>
               </div>
               
               <div className="flex justify-between items-center p-3 border rounded-lg">
                 <div>
-                  <div className="font-medium text-sm">银保监分局本级</div>
-                  <div className="text-xs text-muted-foreground">2024-01-14 16:45</div>
+                  <div className="font-medium text-sm">数据缓存</div>
+                  <div className="text-xs text-muted-foreground">系统缓存</div>
                 </div>
-                <Badge variant="destructive">失败</Badge>
+                <Badge variant={refreshDataMutation.isPending ? "secondary" : "default"}>
+                  {refreshDataMutation.isPending ? "刷新中" : "正常"}
+                </Badge>
               </div>
             </div>
           </CardContent>
