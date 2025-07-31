@@ -3,7 +3,8 @@ import glob
 import pandas as pd
 import io
 import asyncio
-from typing import Dict, Any, Optional
+from datetime import datetime
+from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, HTTPException, BackgroundTasks, File, UploadFile, Query
 from fastapi.responses import StreamingResponse
 from app.models.case import UpdateRequest, OrganizationType
@@ -288,6 +289,153 @@ async def update_case_details(
         print(f"Error in update_case_details: {str(e)}")
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/case-details-progress/{org_name}")
+async def get_case_details_progress(org_name: str):
+    """Get case details update progress"""
+    try:
+        # Map organization name if needed
+        org_mapping = {
+            "银保监会机关": OrganizationType.HEADQUARTERS,
+            "银保监局本级": OrganizationType.PROVINCIAL,
+            "银保监分局本级": OrganizationType.LOCAL,
+            "headquarters": OrganizationType.HEADQUARTERS,
+            "provincial": OrganizationType.PROVINCIAL,
+            "local": OrganizationType.LOCAL
+        }
+        
+        org_enum = org_mapping.get(org_name)
+        if not org_enum:
+            raise HTTPException(status_code=400, detail="Invalid organization name")
+        
+        progress = scraper_service.get_temp_progress(org_enum)
+        
+        return {
+            "org_name": org_name,
+            "progress": progress,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_case_details_progress: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/cleanup-temp-files")
+async def cleanup_temp_files(
+    org_name: Optional[str] = Query(None, description="Organization name filter"),
+    max_age_hours: int = Query(24, description="Maximum age of temp files in hours")
+):
+    """Clean up old temporary files"""
+    try:
+        # Convert string to enum if provided
+        org_enum = None
+        if org_name:
+            org_mapping = {
+                "银保监会机关": OrganizationType.HEADQUARTERS,
+                "银保监局本级": OrganizationType.PROVINCIAL,
+                "银保监分局本级": OrganizationType.LOCAL,
+                "headquarters": OrganizationType.HEADQUARTERS,
+                "provincial": OrganizationType.PROVINCIAL,
+                "local": OrganizationType.LOCAL
+            }
+            org_enum = org_mapping.get(org_name)
+        
+        result = scraper_service.cleanup_temp_files(org_enum, max_age_hours)
+        
+        return {
+            "message": "Cleanup completed",
+            "org_name": org_name,
+            "max_age_hours": max_age_hours,
+            "result": result
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in cleanup_temp_files: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/pending-cases/{org_name}")
+async def get_pending_cases_for_update(org_name: str):
+    """Get list of cases pending details update"""
+    try:
+        # Map organization name to enum
+        org_mapping = {
+            "银保监会机关": OrganizationType.HEADQUARTERS,
+            "银保监局本级": OrganizationType.PROVINCIAL,
+            "银保监分局本级": OrganizationType.LOCAL,
+            "headquarters": OrganizationType.HEADQUARTERS,
+            "provincial": OrganizationType.PROVINCIAL,
+            "local": OrganizationType.LOCAL
+        }
+        
+        org_enum = org_mapping.get(org_name)
+        if not org_enum:
+            raise HTTPException(status_code=400, detail="Invalid organization name")
+        
+        pending_cases = await scraper_service.get_pending_cases_for_update(org_enum)
+        
+        return {
+            "org_name": org_name,
+            "pending_cases": pending_cases,
+            "total": len(pending_cases),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_pending_cases_for_update: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/update-selected-case-details")
+async def update_selected_case_details(
+    update_request: dict,
+    background_tasks: BackgroundTasks
+):
+    """Update details for selected cases only"""
+    try:
+        org_name = update_request.get("org_name")
+        selected_case_ids = update_request.get("selected_case_ids", [])
+        
+        if not org_name or not selected_case_ids:
+            raise HTTPException(status_code=400, detail="Missing org_name or selected_case_ids")
+        
+        # Map organization name to enum
+        org_mapping = {
+            "银保监会机关": OrganizationType.HEADQUARTERS,
+            "银保监局本级": OrganizationType.PROVINCIAL,
+            "银保监分局本级": OrganizationType.LOCAL,
+            "headquarters": OrganizationType.HEADQUARTERS,
+            "provincial": OrganizationType.PROVINCIAL,
+            "local": OrganizationType.LOCAL
+        }
+        
+        org_enum = org_mapping.get(org_name)
+        if not org_enum:
+            raise HTTPException(status_code=400, detail="Invalid organization name")
+        
+        # Create task
+        task = create_update_details_task(org_name)
+        
+        # Add background task for updating selected case details
+        background_tasks.add_task(
+            _run_selected_update_details_with_tracking,
+            task.id,
+            org_enum,
+            selected_case_ids
+        )
+        
+        return {
+            "task_id": task.id,
+            "message": f"Selected case details update task started for {len(selected_case_ids)} cases",
+            "org_name": org_name,
+            "selected_count": len(selected_case_ids)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in update_selected_case_details: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -883,19 +1031,69 @@ async def _run_update_details_with_tracking(task_id: str, org_name: str):
     try:
         task_service.start_task(task_id)
         
-        # Simulate progress updates
-        for progress in [20, 40, 60, 80]:
-            task_service.update_task_progress(task_id, progress)
-            await asyncio.sleep(1)  # Simulate work
-        
         # Run the actual update function
         result = await scraper_service.update_case_details(org_name)
         
-        # Complete the task
-        task_service.complete_task(task_id, {
-            "org_name": org_name,
-            "status": "completed"
-        })
+        # Update progress based on result
+        if result.get("status") == "completed":
+            updated_cases = result.get("updated_cases", 0)
+            error_count = result.get("error_count", 0)
+            temp_saves = result.get("temp_saves", 0)
+            
+            # Set final progress to 100%
+            task_service.update_task_progress(task_id, 100)
+            
+            # Complete the task with detailed results
+            task_service.complete_task(task_id, {
+                "org_name": org_name,
+                "status": "completed",
+                "updated_cases": updated_cases,
+                "error_count": error_count,
+                "temp_saves": temp_saves,
+                "message": result.get("message", "Case details updated successfully")
+            })
+        else:
+            # Handle error case
+            task_service.fail_task(task_id, result.get("message", "Update failed"))
+        
+    except Exception as e:
+        task_service.fail_task(task_id, str(e))
+        logger.error(f"Task {task_id} failed: {str(e)}")
+
+
+async def _run_selected_update_details_with_tracking(task_id: str, org_name: OrganizationType, selected_case_ids: List[str]):
+    """Run selected case details update with task tracking"""
+    try:
+        task_service.start_task(task_id)
+        
+        # Run the actual update function for selected cases
+        result = await scraper_service.update_selected_case_details(org_name, selected_case_ids)
+        
+        # Update progress based on result
+        if result.get("status") == "completed":
+            updated_cases = result.get("updated_cases", 0)
+            error_count = result.get("error_count", 0)
+            requested_cases = result.get("requested_cases", 0)
+            cases_to_update = result.get("cases_to_update", 0)
+            success_rate = result.get("success_rate", "0%")
+            
+            # Set final progress to 100%
+            task_service.update_task_progress(task_id, 100)
+            
+            # Complete the task with detailed results
+            task_service.complete_task(task_id, {
+                "org_name": str(org_name),
+                "status": "completed",
+                "requested_cases": requested_cases,
+                "cases_to_update": cases_to_update,
+                "updated_cases": updated_cases,
+                "error_count": error_count,
+                "success_rate": success_rate,
+                "message": result.get("message", f"Selected case details updated successfully: {updated_cases} cases")
+            })
+        else:
+            # Handle error case
+            task_service.fail_task(task_id, result.get("message", "Selected update failed"))
         
     except Exception as e:
         task_service.fail_task(task_id, str(e))

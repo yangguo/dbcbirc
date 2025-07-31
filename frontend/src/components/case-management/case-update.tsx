@@ -12,7 +12,7 @@ import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api'
-import { RefreshCw, Download, CheckCircle, XCircle, Clock, AlertCircle, Database, Globe } from 'lucide-react'
+import { RefreshCw, Download, CheckCircle, XCircle, Clock, AlertCircle, Database, Globe, List, FileText } from 'lucide-react'
 
 interface UpdateTask {
   id: string
@@ -32,11 +32,28 @@ interface UpdateTask {
   }
 }
 
+interface PendingCase {
+  id: string
+  title: string
+  subtitle: string
+  publish_date: string
+  content: string
+}
+
+interface PendingCasesData {
+  org_name: string
+  pending_cases: PendingCase[]
+  total: number
+  timestamp: string
+}
+
 export function CaseUpdate() {
   const [selectedOrg, setSelectedOrg] = useState('')
   const [startPage, setStartPage] = useState(1)
   const [endPage, setEndPage] = useState(1)
   const [updateType, setUpdateType] = useState<'cases' | 'details'>('cases')
+  const [showCaseSelection, setShowCaseSelection] = useState(false)
+  const [selectedCaseIds, setSelectedCaseIds] = useState<string[]>([])
 
   const { toast } = useToast()
 
@@ -47,7 +64,7 @@ export function CaseUpdate() {
     refetchInterval: 5000, // Refresh every 5 seconds
   })
 
-  const updateTasks = tasksData?.tasks || []
+  const updateTasks = (tasksData as any)?.tasks || []
 
   // Get system info
   const { data: systemInfo, isLoading: systemLoading } = useQuery({
@@ -60,6 +77,13 @@ export function CaseUpdate() {
     queryKey: ['caseSummary', selectedOrg],
     queryFn: () => selectedOrg ? apiClient.getCaseSummaryByOrg(selectedOrg) : null,
     enabled: !!selectedOrg,
+  })
+
+  // Query for pending cases (when selection is shown)
+  const { data: pendingCasesData, isLoading: pendingCasesLoading } = useQuery({
+    queryKey: ['pendingCases', selectedOrg],
+    queryFn: () => apiClient.getPendingCases(selectedOrg),
+    enabled: showCaseSelection && !!selectedOrg, // Only fetch when selection dialog is shown and org is selected
   })
 
   // Update cases mutation
@@ -100,6 +124,28 @@ export function CaseUpdate() {
     },
   })
 
+  // Update selected case details mutation
+  const updateSelectedCaseDetailsMutation = useMutation({
+    mutationFn: ({ orgName, selectedCaseIds }: { orgName: string; selectedCaseIds: string[] }) => 
+      apiClient.updateSelectedCaseDetails(orgName, selectedCaseIds),
+    onSuccess: (result) => {
+      toast({
+        title: '选择性更新任务已启动',
+        description: `已开始更新选中的 ${selectedCaseIds.length} 个案例`,
+      })
+      // Reset selection state
+      setShowCaseSelection(false)
+      setSelectedCaseIds([])
+    },
+    onError: (error) => {
+      toast({
+        title: '选择性更新失败',
+        description: '启动选择性案例详情更新任务失败，请重试',
+        variant: 'destructive',
+      })
+    },
+  })
+
   // Refresh data mutation
   const refreshDataMutation = useMutation({
     mutationFn: () => apiClient.refreshData(),
@@ -133,6 +179,54 @@ export function CaseUpdate() {
     } else {
       updateDetailsMutation.mutate({ orgName: selectedOrg })
     }
+  }
+
+  const handleShowCaseSelection = () => {
+    if (!selectedOrg) {
+      toast({
+        title: '请选择机构',
+        description: '请先选择要更新的机构',
+        variant: 'destructive',
+      })
+      return
+    }
+    setShowCaseSelection(true)
+    setSelectedCaseIds([]) // Reset selection when opening
+  }
+
+  const handleCaseSelectionChange = (caseId: string, isSelected: boolean) => {
+    if (isSelected) {
+      setSelectedCaseIds(prev => [...prev, caseId])
+    } else {
+      setSelectedCaseIds(prev => prev.filter(id => id !== caseId))
+    }
+  }
+
+  const handleSelectAllCases = () => {
+    if (pendingCasesData) {
+      const allCaseIds = (pendingCasesData as any).pending_cases.map((c: any) => c.id)
+      setSelectedCaseIds(allCaseIds)
+    }
+  }
+
+  const handleDeselectAllCases = () => {
+    setSelectedCaseIds([])
+  }
+
+  const handleUpdateSelectedCases = () => {
+    if (selectedCaseIds.length === 0) {
+      toast({
+        title: '请选择案例',
+        description: '请至少选择一个案例进行更新',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    updateSelectedCaseDetailsMutation.mutate({
+      orgName: selectedOrg,
+      selectedCaseIds
+    })
   }
 
   const getStatusIcon = (status: string) => {
@@ -284,18 +378,44 @@ export function CaseUpdate() {
               )}
 
               <div className="flex gap-2">
-                <Button 
-                  onClick={handleUpdateCases} 
-                  disabled={updateCasesMutation.isPending || updateDetailsMutation.isPending}
-                  className="flex-1"
-                >
-                  {(updateCasesMutation.isPending || updateDetailsMutation.isPending) ? (
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4 mr-2" />
-                  )}
-                  开始更新
-                </Button>
+                {updateType === 'details' ? (
+                  <>
+                    <Button 
+                      onClick={handleUpdateCases} 
+                      disabled={updateCasesMutation.isPending || updateDetailsMutation.isPending || updateSelectedCaseDetailsMutation.isPending}
+                      className="flex-1"
+                    >
+                      {(updateCasesMutation.isPending || updateDetailsMutation.isPending) ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <FileText className="h-4 w-4 mr-2" />
+                      )}
+                      更新全部详情
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={handleShowCaseSelection} 
+                      disabled={updateCasesMutation.isPending || updateDetailsMutation.isPending || updateSelectedCaseDetailsMutation.isPending}
+                      className="flex-1"
+                    >
+                      <List className="h-4 w-4 mr-2" />
+                      选择案例更新
+                    </Button>
+                  </>
+                ) : (
+                  <Button 
+                    onClick={handleUpdateCases} 
+                    disabled={updateCasesMutation.isPending || updateDetailsMutation.isPending || updateSelectedCaseDetailsMutation.isPending}
+                    className="flex-1"
+                  >
+                    {(updateCasesMutation.isPending || updateDetailsMutation.isPending) ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 mr-2" />
+                    )}
+                    开始更新
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -451,6 +571,126 @@ export function CaseUpdate() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Case Selection Interface */}
+      {showCaseSelection && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+            <CardHeader>
+              <CardTitle>选择要更新的案例</CardTitle>
+              <CardDescription>
+                为 <strong>{selectedOrg}</strong> 选择需要更新详情的案例
+              </CardDescription>
+            </CardHeader>
+            
+            <CardContent className="flex-1 overflow-auto">
+              {pendingCasesLoading ? (
+                <div className="flex items-center justify-center p-8">
+                  <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                  <span>加载待更新案例中...</span>
+                </div>
+              ) : pendingCasesData && (pendingCasesData as any).pending_cases.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
+                    <div className="text-sm">
+                      共 <strong>{(pendingCasesData as any).total}</strong> 个案例待更新
+                      {selectedCaseIds.length > 0 && (
+                        <span className="ml-2">
+                          (已选择 <strong>{selectedCaseIds.length}</strong> 个)
+                        </span>
+                      )}
+                    </div>
+                    <div className="space-x-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleSelectAllCases}
+                      >
+                        全选
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleDeselectAllCases}
+                      >
+                        取消全选
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {(pendingCasesData as any).pending_cases.map((case_item: any) => (
+                      <div key={case_item.id} className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50">
+                        <input
+                          type="checkbox"
+                          id={`case-${case_item.id}`}
+                          className="mt-1"
+                          checked={selectedCaseIds.includes(case_item.id)}
+                          onChange={(e) => 
+                            handleCaseSelectionChange(case_item.id, e.target.checked)
+                          }
+                        />
+                        <div className="flex-1 min-w-0">
+                          <label 
+                            htmlFor={`case-${case_item.id}`}
+                            className="cursor-pointer block"
+                          >
+                            <div className="font-medium text-sm truncate">
+                              {case_item.title || '无标题'}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              <span className="inline-block mr-4">
+                                <strong>ID:</strong> {case_item.id}
+                              </span>
+                              <span className="inline-block mr-4">
+                                <strong>文号:</strong> {case_item.subtitle || '无'}
+                              </span>
+                              <span className="inline-block">
+                                <strong>日期:</strong> {case_item.publish_date || '无'}
+                              </span>
+                            </div>
+                            {case_item.content && (
+                              <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                {case_item.content}
+                              </div>
+                            )}
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center p-8 text-muted-foreground">
+                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>暂无待更新的案例</p>
+                  <p className="text-sm mt-2">所有案例的详情都已更新完成</p>
+                </div>
+              )}
+              
+              <div className="flex justify-end space-x-2 mt-6 pt-4 border-t">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowCaseSelection(false)}
+                >
+                  取消
+                </Button>
+                <Button 
+                  onClick={handleUpdateSelectedCases}
+                  disabled={selectedCaseIds.length === 0 || updateSelectedCaseDetailsMutation.isPending}
+                >
+                  {updateSelectedCaseDetailsMutation.isPending ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4 mr-2" />
+                  )}
+                  更新选中案例 ({selectedCaseIds.length})
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

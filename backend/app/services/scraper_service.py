@@ -10,6 +10,7 @@ import os
 import glob
 import hashlib
 import traceback
+import re
 from datetime import datetime, date
 from typing import List, Dict, Any, Optional
 from app.core.database import db_manager
@@ -74,6 +75,41 @@ class ScraperService:
         """Generate unique case ID from case data"""
         content = f"{title}_{subtitle}_{publish_date}"
         return hashlib.md5(content.encode('utf-8')).hexdigest()[:16]
+    
+    def _clean_doc_content(self, raw_content: str) -> str:
+        """Clean docClob content - simple approach like dbcbirc.py"""
+        if not raw_content:
+            return ""
+        
+        content_str = str(raw_content).strip()
+        
+        # Only clean if content contains HTML/XML tags
+        if '<' in content_str and '>' in content_str:
+            try:
+                print(f"DEBUG: Cleaning HTML content, original length: {len(content_str)}")
+                soup = BeautifulSoup(content_str, "html.parser")
+                cleaned_content = soup.get_text().strip()
+                
+                # Basic whitespace cleanup
+                cleaned_content = re.sub(r'\s+', ' ', cleaned_content)
+                
+                print(f"DEBUG: Cleaned content length: {len(cleaned_content)}")
+                print(f"DEBUG: Cleaned content preview: {cleaned_content[:100]}...")
+                
+                # Return cleaned content if it's meaningful, otherwise return original
+                if cleaned_content and len(cleaned_content) > 10:
+                    return cleaned_content
+                else:
+                    print("DEBUG: Cleaned content too short, returning original")
+                    return content_str
+                    
+            except Exception as e:
+                print(f"Error cleaning HTML content: {e}")
+        else:
+            print(f"DEBUG: No HTML tags found in content, length: {len(content_str)}")
+        
+        # Return original content if no HTML tags or cleaning failed
+        return content_str
     
     def _deduplicate_cases(self, cases: List[Dict[str, Any]], existing_ids: set = None) -> List[Dict[str, Any]]:
         """去重案例数据，同时检查数据库和文件中的重复"""
@@ -208,7 +244,7 @@ class ScraperService:
                         title=case_data.get('title', ''),
                         subtitle=case_data.get('subtitle', ''),
                         publish_date=publish_date,
-                        content=case_data.get('content', case_data.get('docClob', '')),
+                        content=self._clean_doc_content(case_data.get('content', case_data.get('docClob', ''))),
                         org=self.org_name_mapping[org_name]
                     )
                     case_details.append(case_detail.dict())
@@ -314,9 +350,9 @@ class ScraperService:
                                 'title': row.get('docTitle', ''),
                                 'subtitle': row.get('docSubtitle', ''),
                                 'publish_date': row.get('publishDate', ''),
-                                'content': row.get('docClob', ''),
-                                # Keep original data for reference
-                                **row
+                                'content': self._clean_doc_content(row.get('docClob', '')),
+                                # Keep original data for reference, but exclude docClob to avoid overriding cleaned content
+                                **{k: v for k, v in row.items() if k != 'docClob'}
                             }
                             processed_rows.append(processed_row)
                         return processed_rows
@@ -344,13 +380,18 @@ class ScraperService:
                 
                 if "data" in json_data and isinstance(json_data["data"], dict):
                     data_obj = json_data["data"]
+                    # Use helper method to clean docClob content
+                    raw_content = data_obj.get("docClob", "")
+                    cleaned_content = self._clean_doc_content(raw_content)
+                    
                     return {
                         "id": case_id,
                         "title": data_obj.get("docTitle", ""),
                         "subtitle": data_obj.get("docSubtitle", ""),
-                        "content": data_obj.get("docClob", ""),
+                        "content": cleaned_content,
                         "publish_date": data_obj.get("publishDate", ""),
-                        **data_obj  # Include all original fields
+                        # Include all original fields except docClob to avoid overriding cleaned content
+                        **{k: v for k, v in data_obj.items() if k != 'docClob'}
                     }
                 
                 raise Exception("Invalid JSON structure")
@@ -455,112 +496,290 @@ class ScraperService:
             traceback.print_exc()
             raise
     
-    async def update_case_details(self, org_name: OrganizationType):
-        """Update case details for an organization - self-contained implementation"""
+    def cleanup_temp_files(self, org_name: OrganizationType = None, max_age_hours: int = 24) -> Dict[str, Any]:
+        """Clean up old temporary files"""
         try:
-            print(f"Starting case details update for {org_name}")
+            if org_name:
+                org_name_str = self.org_name_mapping[org_name]
+                temp_pattern = f"temp_cbircdtl{org_name_str}*.csv"
+            else:
+                temp_pattern = "temp_cbircdtl*.csv"
             
-            # Check if database connection is enabled
-            if not db_manager._connection_enabled:
-                print("Database connection is disabled - skipping case detail updates")
-                return {
-                    "status": "skipped",
-                    "message": "Database connection disabled",
-                    "updated_cases": 0
-                }
+            temp_files = glob.glob(os.path.join(self.data_dir, temp_pattern))
             
-            # Check if database is connected
-            if not db_manager.client:
-                print("Database not connected - skipping case detail updates")
-                return {
-                    "status": "skipped", 
-                    "message": "Database not connected",
-                    "updated_cases": 0
-                }
+            cleaned_files = []
+            current_time = time.time()
+            max_age_seconds = max_age_hours * 3600
             
-            org_name_str = self.org_name_mapping[org_name]
-            collection_name = f"cases_{org_name_str}"
-            
-            # Get cases that need detail updates (missing content)
-            collection = db_manager.get_collection(collection_name)
-            
-            # Find cases with empty or missing content
-            cursor = collection.find({
-                "$or": [
-                    {"content": {"$exists": False}},
-                    {"content": ""},
-                    {"content": None}
-                ]
-            })
-            
-            cases_to_update = []
-            async for doc in cursor:
-                cases_to_update.append({
-                    "id": doc["id"],
-                    "title": doc.get("title", ""),
-                    "subtitle": doc.get("subtitle", "")
-                })
-            
-            print(f"Found {len(cases_to_update)} cases needing detail updates")
-            
-            if not cases_to_update:
-                return {
-                    "status": "completed",
-                    "updated_cases": 0
-                }
-            
-            # Fetch details in batches
-            updated_count = 0
-            errors = []
-            
-            async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=30),
-                connector=aiohttp.TCPConnector(ssl=False)
-            ) as session:
-                
-                for i, case in enumerate(cases_to_update):
-                    try:
-                        print(f"Updating case {i+1}/{len(cases_to_update)}: {case['id']}")
-                        
-                        # Fetch detailed content
-                        detail_data = await self._fetch_case_detail(session, case['id'])
-                        
-                        # Update the case in database
-                        await collection.update_one(
-                            {"id": case['id']},
-                            {"$set": {
-                                "content": detail_data.get("content", ""),
-                                "updated_at": datetime.now()
-                            }}
-                        )
-                        
-                        updated_count += 1
-                        
-                        # Rate limiting
-                        delay = random.uniform(1, 3)
-                        await asyncio.sleep(delay)
-                        
-                    except Exception as e:
-                        error_msg = f"Case {case['id']}: {str(e)}"
-                        print(f"ERROR: {error_msg}")
-                        errors.append(error_msg)
-                        continue
-            
-            print(f"Updated details for {updated_count} cases")
+            for temp_file in temp_files:
+                try:
+                    file_age = current_time - os.path.getmtime(temp_file)
+                    if file_age > max_age_seconds:
+                        os.remove(temp_file)
+                        cleaned_files.append(os.path.basename(temp_file))
+                        print(f"Cleaned up old temporary file: {temp_file}")
+                except Exception as e:
+                    print(f"Error cleaning up temp file {temp_file}: {e}")
             
             return {
-                "status": "completed",
-                "updated_cases": updated_count,
-                "errors": len(errors),
-                "error_details": errors
+                "cleaned_files": cleaned_files,
+                "total_cleaned": len(cleaned_files),
+                "remaining_temp_files": len(temp_files) - len(cleaned_files)
             }
             
         except Exception as e:
-            print(f"Error updating case details: {e}")
-            print("Continuing without database updates...")
+            print(f"Error in cleanup_temp_files: {e}")
+            return {
+                "cleaned_files": [],
+                "total_cleaned": 0,
+                "remaining_temp_files": 0,
+                "error": str(e)
+            }
+
+    def get_temp_progress(self, org_name: OrganizationType, task_timestamp: str = None) -> Dict[str, Any]:
+        """Get progress from temporary files"""
+        try:
+            org_name_str = self.org_name_mapping[org_name]
+            
+            # Look for temporary files
+            if task_timestamp:
+                temp_pattern = f"temp_cbircdtl{org_name_str}_{task_timestamp}*.csv"
+            else:
+                temp_pattern = f"temp_cbircdtl{org_name_str}*.csv"
+            
+            temp_files = glob.glob(os.path.join(self.data_dir, temp_pattern))
+            
+            if not temp_files:
+                return {
+                    "has_temp_data": False,
+                    "processed_cases": 0,
+                    "temp_files": 0
+                }
+            
+            # Get the most recent temp file
+            temp_files.sort(key=os.path.getmtime, reverse=True)
+            latest_temp_file = temp_files[0]
+            
+            try:
+                temp_df = pd.read_csv(latest_temp_file)
+                processed_cases = len(temp_df)
+                
+                return {
+                    "has_temp_data": True,
+                    "processed_cases": processed_cases,
+                    "temp_files": len(temp_files),
+                    "latest_temp_file": os.path.basename(latest_temp_file),
+                    "last_modified": os.path.getmtime(latest_temp_file)
+                }
+            except Exception as e:
+                print(f"Error reading temp file {latest_temp_file}: {e}")
+                return {
+                    "has_temp_data": False,
+                    "processed_cases": 0,
+                    "temp_files": len(temp_files),
+                    "error": str(e)
+                }
+                
+        except Exception as e:
+            print(f"Error getting temp progress: {e}")
+            return {
+                "has_temp_data": False,
+                "processed_cases": 0, 
+                "temp_files": 0,
+                "error": str(e)
+            }
+
+    async def update_case_details(self, org_name: OrganizationType):
+        """Update case details from existing summary data - works with CSV files"""
+        try:
+            print(f"Starting case details update for {org_name}")
+            
+            org_name_str = self.org_name_mapping[org_name]
+            
+            # Get existing summary data from CSV files
+            summary_pattern = f"cbircsum{org_name_str}*.csv"
+            summary_files = glob.glob(os.path.join(self.data_dir, summary_pattern))
+            
+            if not summary_files:
+                return {
+                    "status": "error",
+                    "message": f"No summary data found for {org_name}",
+                    "updated_cases": 0
+                }
+            
+            # Load all summary data
+            summary_dfs = []
+            for file_path in summary_files:
+                try:
+                    df = pd.read_csv(file_path)
+                    summary_dfs.append(df)
+                except Exception as e:
+                    print(f"Error reading summary file {file_path}: {e}")
+            
+            if not summary_dfs:
+                return {
+                    "status": "error",
+                    "message": f"Could not load summary data for {org_name}",
+                    "updated_cases": 0
+                }
+            
+            # Combine all summary data
+            all_summary = pd.concat(summary_dfs, ignore_index=True)
+            all_summary.drop_duplicates(subset=['docId'], inplace=True)
+            
+            # Get existing detail data to avoid duplicates
+            detail_pattern = f"cbircdtl{org_name_str}*.csv"
+            detail_files = glob.glob(os.path.join(self.data_dir, detail_pattern))
+            
+            # Also check for temporary files to resume if needed
+            temp_pattern = f"temp_cbircdtl{org_name_str}*.csv"
+            temp_files = glob.glob(os.path.join(self.data_dir, temp_pattern))
+            
+            existing_detail_ids = set()
+            resumed_from_temp = False
+            
+            # Check temporary files first (most recent work)
+            if temp_files:
+                print(f"Found {len(temp_files)} temporary files, checking for resumable work...")
+                for temp_file in temp_files:
+                    try:
+                        temp_df = pd.read_csv(temp_file)
+                        if 'id' in temp_df.columns:
+                            temp_ids = set(temp_df['id'].astype(str).tolist())
+                            existing_detail_ids.update(temp_ids)
+                            resumed_from_temp = True
+                            print(f"Resumed {len(temp_ids)} case IDs from temporary file: {temp_file}")
+                    except Exception as e:
+                        print(f"Error reading temporary file {temp_file}: {e}")
+            
+            # Then check regular detail files
+            for file_path in detail_files:
+                try:
+                    df = pd.read_csv(file_path)
+                    if 'id' in df.columns:
+                        existing_detail_ids.update(df['id'].astype(str).tolist())
+                except Exception as e:
+                    print(f"Error reading detail file {file_path}: {e}")
+            
+            if resumed_from_temp:
+                print(f"Resuming from previous work - already have details for {len(existing_detail_ids)} cases")
+            
+            # Filter to only new cases that need details
+            if 'docId' not in all_summary.columns:
+                return {
+                    "status": "error",
+                    "message": f"Summary data missing 'docId' column for {org_name}",
+                    "updated_cases": 0
+                }
+            
+            # Convert docId to string for comparison
+            all_summary['docId'] = all_summary['docId'].astype(str)
+            cases_to_update = all_summary[~all_summary['docId'].isin(existing_detail_ids)]
+            
+            if cases_to_update.empty:
+                return {
+                    "status": "completed",
+                    "message": f"All cases already have details for {org_name}",
+                    "updated_cases": 0
+                }
+            
+            print(f"Found {len(cases_to_update)} cases needing details")
+            
+            # Fetch details for new cases
+            doc_ids = cases_to_update['docId'].tolist()
+            detail_results = []
+            error_count = 0
+            
+            # Create temporary file for saving progress
+            timestamp = self._get_timestamp()
+            temp_filename = f"temp_cbircdtl{org_name_str}_{timestamp}"
+            temp_batch_size = 10  # Save every 10 records
+            
+            connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ssl=False)
+            timeout = aiohttp.ClientTimeout(total=30, connect=10, sock_read=20)
+            
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                for i, doc_id in enumerate(doc_ids):
+                    try:
+                        detail_url = f"{self.detail_base_url}={doc_id}.json"
+                        print(f"Fetching detail {i+1}/{len(doc_ids)}: {doc_id} - URL: {detail_url}")
+                        
+                        detail_data = await self._fetch_case_detail(session, str(doc_id))
+                        
+                        if detail_data:
+                            # Format detail data with English field names
+                            raw_content = detail_data.get("docClob", "")
+                            cleaned_content = self._clean_doc_content(raw_content)
+                            formatted_detail = {
+                                "title": detail_data.get("docTitle", ""),
+                                "subtitle": detail_data.get("docSubtitle", ""),
+                                "date": detail_data.get("publishDate", ""),
+                                "doc": cleaned_content,
+                                "id": str(doc_id)
+                            }
+                            detail_results.append(formatted_detail)
+                            
+                            # Save temporary results every batch_size records
+                            if len(detail_results) % temp_batch_size == 0:
+                                temp_df = pd.DataFrame(detail_results)
+                                temp_filepath = self._save_to_csv(temp_df, temp_filename)
+                                print(f"Saved {len(detail_results)} records to temporary file: {temp_filepath}")
+                        
+                        # Add delay between requests
+                        if i < len(doc_ids) - 1:  # Don't delay after the last request
+                            await asyncio.sleep(random.uniform(1, 3))
+                            
+                    except Exception as e:
+                        print(f"Error fetching detail for {doc_id}: {e}")
+                        error_count += 1
+                        continue
+            
+            # Save results to CSV
+            updated_cases = 0
+            if detail_results:
+                detail_df = pd.DataFrame(detail_results)
+                
+                # Save final timestamped file
+                final_filename = f"cbircdtl{org_name_str}_{timestamp}"
+                filepath = self._save_to_csv(detail_df, final_filename)
+                
+                if filepath:
+                    updated_cases = len(detail_results)
+                    print(f"Saved {updated_cases} new case details to final file: {filepath}")
+                    
+                    # Clean up temporary file if it exists
+                    try:
+                        temp_filepath = os.path.join(self.data_dir, f"{temp_filename}.csv")
+                        if os.path.exists(temp_filepath):
+                            os.remove(temp_filepath)
+                            print(f"Cleaned up temporary file: {temp_filepath}")
+                    except Exception as e:
+                        print(f"Warning: Could not clean up temporary file: {e}")
+                else:
+                    print("Failed to save case details")
+            else:
+                # Clean up temporary file if no final results
+                try:
+                    temp_filepath = os.path.join(self.data_dir, f"{temp_filename}.csv")
+                    if os.path.exists(temp_filepath):
+                        os.remove(temp_filepath)
+                        print(f"Cleaned up temporary file (no results): {temp_filepath}")
+                except Exception as e:
+                    print(f"Warning: Could not clean up temporary file: {e}")
+            
+            return {
+                "status": "completed",
+                "message": f"Updated {updated_cases} case details for {org_name}",
+                "updated_cases": updated_cases,
+                "error_count": error_count,
+                "temp_saves": len(detail_results) // temp_batch_size if detail_results else 0
+            }
+            
+        except Exception as e:
+            print(f"Error in update_case_details: {e}")
             return {
                 "status": "error",
-                "message": str(e),
+                "message": f"Error updating case details: {str(e)}",
                 "updated_cases": 0
             }
     
@@ -598,11 +817,15 @@ class ScraperService:
                     if not isinstance(data_obj, dict):
                         raise ValueError("Invalid data structure in JSON response")
                         
+                    # Clean content using helper method
+                    raw_content = data_obj.get("docClob", "")
+                    cleaned_content = self._clean_doc_content(raw_content)
+                    
                     return {
                         "id": case_id,
                         "title": data_obj.get("docTitle", ""),
                         "subtitle": data_obj.get("docSubtitle", ""),
-                        "content": data_obj.get("docClob", ""),
+                        "content": cleaned_content,
                         "date": data_obj.get("publishDate", ""),
                         "publish_date": data_obj.get("publishDate", "")
                     }
@@ -643,11 +866,15 @@ class ScraperService:
                                 json_data = json.loads(text)
                                 if "data" in json_data and isinstance(json_data["data"], dict):
                                     data_obj = json_data["data"]
+                                    # Clean content using helper method
+                                    raw_content = data_obj.get("docClob", "")
+                                    cleaned_content = self._clean_doc_content(raw_content)
+                                    
                                     results.append({
                                         "id": case_id,
                                         "title": data_obj.get("docTitle", ""),
                                         "subtitle": data_obj.get("docSubtitle", ""),
-                                        "content": data_obj.get("docClob", ""),
+                                        "content": cleaned_content,
                                         "date": data_obj.get("publishDate", ""),
                                         "publish_date": data_obj.get("publishDate", "")
                                     })
@@ -883,6 +1110,245 @@ class ScraperService:
             
         except Exception as e:
             print(f"Error updating case analysis: {e}")
+            raise
+
+    async def get_pending_cases_for_update(self, org_name: OrganizationType) -> List[Dict[str, Any]]:
+        """Get list of cases that need details update"""
+        try:
+            org_name_str = self.org_name_mapping[org_name]
+            
+            # Get existing summary data from CSV files
+            summary_pattern = f"cbircsum{org_name_str}*.csv"
+            summary_files = glob.glob(os.path.join(self.data_dir, summary_pattern))
+            
+            if not summary_files:
+                return []
+            
+            # Load all summary data
+            summary_dfs = []
+            for file_path in summary_files:
+                try:
+                    df = pd.read_csv(file_path)
+                    summary_dfs.append(df)
+                except Exception as e:
+                    print(f"Error reading summary file {file_path}: {e}")
+            
+            if not summary_dfs:
+                return []
+            
+            # Combine all summary data
+            all_summary = pd.concat(summary_dfs, ignore_index=True)
+            all_summary.drop_duplicates(subset=['docId'], inplace=True)
+            
+            # Get existing detail data to find what's missing
+            detail_pattern = f"cbircdtl{org_name_str}*.csv"
+            detail_files = glob.glob(os.path.join(self.data_dir, detail_pattern))
+            
+            existing_detail_ids = set()
+            for file_path in detail_files:
+                try:
+                    df = pd.read_csv(file_path)
+                    if 'id' in df.columns:
+                        existing_detail_ids.update(df['id'].astype(str).tolist())
+                except Exception as e:
+                    print(f"Error reading detail file {file_path}: {e}")
+            
+            # Filter to only cases that need details
+            if 'docId' not in all_summary.columns:
+                return []
+            
+            # Convert docId to string for comparison
+            all_summary['docId'] = all_summary['docId'].astype(str)
+            pending_cases = all_summary[~all_summary['docId'].isin(existing_detail_ids)]
+            
+            if pending_cases.empty:
+                return []
+            
+            # Convert to list of dictionaries for API response
+            pending_list = []
+            for _, row in pending_cases.iterrows():
+                case_data = {
+                    'id': str(row.get('docId', '')),
+                    'title': str(row.get('docTitle', row.get('title', ''))),
+                    'subtitle': str(row.get('docSubtitle', row.get('subtitle', ''))),
+                    'publish_date': str(row.get('publishDate', row.get('publish_date', ''))),
+                    'content': (lambda content: content[:200] + '...' if len(content) > 200 else content)(self._clean_doc_content(row.get('docClob', row.get('content', ''))))
+                }
+                pending_list.append(case_data)
+            
+            return pending_list
+            
+        except Exception as e:
+            print(f"Error getting pending cases: {e}")
+            return []
+
+    async def update_selected_case_details(self, org_name: OrganizationType, selected_case_ids: List[str]):
+        """Update case details for selected cases only"""
+        try:
+            print(f"Starting selected case details update for {org_name}")
+            print(f"Selected case IDs: {selected_case_ids}")
+            
+            org_name_str = self.org_name_mapping[org_name]
+            
+            # Get existing summary data
+            summary_pattern = f"cbircsum{org_name_str}*.csv"
+            summary_files = glob.glob(os.path.join(self.data_dir, summary_pattern))
+            
+            if not summary_files:
+                return {
+                    "status": "error",
+                    "message": f"No summary data found for {org_name}",
+                    "updated_cases": 0
+                }
+            
+            # Load all summary data
+            summary_dfs = []
+            for file_path in summary_files:
+                try:
+                    df = pd.read_csv(file_path)
+                    summary_dfs.append(df)
+                except Exception as e:
+                    print(f"Error reading summary file {file_path}: {e}")
+            
+            if not summary_dfs:
+                return {
+                    "status": "error",
+                    "message": f"Could not load summary data for {org_name}",
+                    "updated_cases": 0
+                }
+            
+            # Combine all summary data
+            all_summary = pd.concat(summary_dfs, ignore_index=True)
+            all_summary.drop_duplicates(subset=['docId'], inplace=True)
+            
+            # Filter to only selected cases
+            all_summary['docId'] = all_summary['docId'].astype(str)
+            selected_cases = all_summary[all_summary['docId'].isin(selected_case_ids)]
+            
+            if selected_cases.empty:
+                return {
+                    "status": "error",
+                    "message": f"No matching cases found for selected IDs",
+                    "updated_cases": 0
+                }
+            
+            print(f"Found {len(selected_cases)} cases to update")
+            
+            # Get existing detail data to avoid duplicates
+            detail_pattern = f"cbircdtl{org_name_str}*.csv"
+            detail_files = glob.glob(os.path.join(self.data_dir, detail_pattern))
+            
+            existing_detail_ids = set()
+            for file_path in detail_files:
+                try:
+                    df = pd.read_csv(file_path)
+                    if 'id' in df.columns:
+                        existing_detail_ids.update(df['id'].astype(str).tolist())
+                except Exception as e:
+                    print(f"Error reading detail file {file_path}: {e}")
+            
+            # Filter out cases that already have details
+            cases_to_update = selected_cases[~selected_cases['docId'].isin(existing_detail_ids)]
+            
+            if cases_to_update.empty:
+                return {
+                    "status": "completed",
+                    "message": f"All selected cases already have details",
+                    "updated_cases": 0
+                }
+            
+            print(f"Found {len(cases_to_update)} new cases needing details")
+            
+            # Fetch details for selected cases
+            doc_ids = cases_to_update['docId'].tolist()
+            detail_results = []
+            error_count = 0
+            
+            # Create temporary file for saving progress
+            timestamp = self._get_timestamp()
+            temp_filename = f"temp_selected_cbircdtl{org_name_str}_{timestamp}"
+            temp_batch_size = 5  # Save every 5 records for selected updates
+            
+            connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ssl=False)
+            timeout = aiohttp.ClientTimeout(total=30, connect=10, sock_read=20)
+            
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                for i, doc_id in enumerate(doc_ids):
+                    try:
+                        detail_url = f"{self.detail_base_url}={doc_id}.json"
+                        print(f"Fetching details for case {i+1}/{len(doc_ids)}: {doc_id} - URL: {detail_url}")
+                        detail_data = await self._fetch_case_detail(session, str(doc_id))
+                        
+                        if detail_data:
+                            # Format detail data with English field names
+                            # Use the already cleaned content from _fetch_case_detail
+                            cleaned_content = detail_data.get("content", "")
+                            formatted_detail = {
+                                "title": detail_data.get("title", ""),
+                                "subtitle": detail_data.get("subtitle", ""),
+                                "date": detail_data.get("publish_date", ""),
+                                "doc": cleaned_content,
+                                "id": str(doc_id)
+                            }
+                            detail_results.append(formatted_detail)
+                            print(f"✓ Successfully fetched details for case {doc_id}")
+                            print(f"DEBUG: Saved doc field preview: {cleaned_content[:200]}")
+                            print(f"DEBUG: Doc field contains HTML tags: {'<' in cleaned_content and '>' in cleaned_content}")
+                            print(f"DEBUG: Doc field length: {len(cleaned_content)}")
+                        
+                        # Save temporary progress every few records
+                        if len(detail_results) % temp_batch_size == 0 and detail_results:
+                            temp_df = pd.DataFrame(detail_results)
+                            temp_filepath = os.path.join(self.data_dir, f"{temp_filename}.csv")
+                            temp_df.to_csv(temp_filepath, index=False, encoding='utf-8-sig')
+                            print(f"Saved temporary progress: {len(detail_results)} cases to {temp_filepath}")
+                        
+                        # Rate limiting
+                        delay = random.uniform(2, 4)
+                        await asyncio.sleep(delay)
+                        
+                    except Exception as e:
+                        error_count += 1
+                        print(f"✗ Error fetching details for case {doc_id}: {e}")
+                        continue
+            
+            # Save final results to CSV
+            updated_cases = 0
+            if detail_results:
+                df_details = pd.DataFrame(detail_results)
+                final_filename = f"cbircdtl{org_name_str}_selected_{timestamp}"
+                final_filepath = self._save_to_csv(df_details, final_filename)
+                updated_cases = len(detail_results)
+                
+                print(f"Saved {updated_cases} case details to {final_filepath}")
+                
+                # Clean up temporary file
+                temp_filepath = os.path.join(self.data_dir, f"{temp_filename}.csv")
+                if os.path.exists(temp_filepath):
+                    try:
+                        os.remove(temp_filepath)
+                        print(f"Cleaned up temporary file: {temp_filepath}")
+                    except Exception as e:
+                        print(f"Could not clean up temporary file: {e}")
+            else:
+                print("No case details were successfully fetched")
+            
+            result = {
+                "status": "completed",
+                "message": f"Selected case details update completed",
+                "requested_cases": len(selected_case_ids),
+                "cases_to_update": len(cases_to_update),
+                "updated_cases": updated_cases,
+                "error_count": error_count,
+                "success_rate": f"{(updated_cases / len(cases_to_update) * 100):.1f}%" if len(cases_to_update) > 0 else "0%"
+            }
+            
+            print(f"Final result: {result}")
+            return result
+            
+        except Exception as e:
+            print(f"FATAL ERROR in update_selected_case_details: {e}")
+            traceback.print_exc()
             raise
 
 

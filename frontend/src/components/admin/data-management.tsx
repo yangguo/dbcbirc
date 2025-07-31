@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api'
-import { Download, Upload, RefreshCw, Database, AlertTriangle, FileText, List } from 'lucide-react'
+import { Download, Upload, RefreshCw, Database, AlertTriangle, FileText, List, Trash2 } from 'lucide-react'
 
 interface CaseSummaryData {
   total_cases: number
@@ -21,12 +21,27 @@ interface CaseSummaryData {
   summary?: string
 }
 
+interface CaseDetailsProgressData {
+  org_name: string
+  progress: {
+    has_temp_data: boolean
+    processed_cases: number
+    temp_files: number
+    latest_temp_file?: string
+    last_modified?: number
+    error?: string
+  }
+  timestamp: string
+}
+
 export function DataManagement() {
   const [updateForm, setUpdateForm] = useState({
     orgName: '银保监会机关',
     startPage: 1,
     endPage: 1,
   })
+
+  const [isCleaningUp, setIsCleaningUp] = useState(false)
 
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -91,6 +106,14 @@ export function DataManagement() {
     },
   })
 
+  // Query for case details progress
+  const { data: caseDetailsProgress } = useQuery({
+    queryKey: ['caseDetailsProgress', updateForm.orgName],
+    queryFn: () => apiClient.getCaseDetailsProgress(updateForm.orgName),
+    refetchInterval: 2000, // Refresh every 2 seconds during updates
+    enabled: updateCaseDetailsMutation.isPending, // Only fetch when updating
+  })
+
   const refreshDataMutation = useMutation({
     mutationFn: () => apiClient.refreshData(),
     onSuccess: () => {
@@ -108,6 +131,25 @@ export function DataManagement() {
       })
     },
   })
+
+  const handleCleanupTempFiles = async () => {
+    setIsCleaningUp(true)
+    try {
+      await apiClient.cleanupTempFiles()
+      toast({
+        title: '清理成功',
+        description: '临时文件已清理',
+      })
+    } catch (error) {
+      toast({
+        title: '清理失败',
+        description: '清理临时文件失败，请重试',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsCleaningUp(false)
+    }
+  }
 
   const handleUpdateCases = () => {
     updateCasesMutation.mutate({
@@ -247,6 +289,7 @@ export function DataManagement() {
             <div className="text-sm text-muted-foreground">
               <p>为 <strong>{updateForm.orgName}</strong> 更新案例详情信息。</p>
               <p className="mt-2">此操作将获取案例的完整内容、处罚决定等详细信息。</p>
+              <p className="mt-2 text-amber-600">💡 提示：选择性案例更新功能已移至"案例管理"页面</p>
             </div>
 
             <Button 
@@ -259,8 +302,35 @@ export function DataManagement() {
               ) : (
                 <FileText className="h-4 w-4 mr-2" />
               )}
-              更新详情
+              更新全部详情
             </Button>
+
+            {/* Display progress information during updates */}
+            {updateCaseDetailsMutation.isPending && caseDetailsProgress && (
+              <div className="text-sm space-y-2 p-3 bg-blue-50 rounded-lg border">
+                <div className="font-medium text-blue-900">更新进度</div>
+                {(caseDetailsProgress as CaseDetailsProgressData).progress?.has_temp_data && (
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-blue-700">
+                      <span>已处理案例：</span>
+                      <Badge variant="secondary">{(caseDetailsProgress as CaseDetailsProgressData).progress.processed_cases}</Badge>
+                    </div>
+                    <div className="flex justify-between text-blue-700">
+                      <span>临时文件：</span>
+                      <Badge variant="outline">{(caseDetailsProgress as CaseDetailsProgressData).progress.temp_files}</Badge>
+                    </div>
+                    {(caseDetailsProgress as CaseDetailsProgressData).progress.latest_temp_file && (
+                      <div className="text-xs text-blue-600">
+                        最新文件: {(caseDetailsProgress as CaseDetailsProgressData).progress.latest_temp_file}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!(caseDetailsProgress as CaseDetailsProgressData).progress?.has_temp_data && (
+                  <div className="text-blue-700">正在准备更新...</div>
+                )}
+              </div>
+            )}
 
             {/* Display case detail summary info */}
             {caseDetailSummary && (
@@ -333,6 +403,20 @@ export function DataManagement() {
             <Button variant="outline" className="w-full">
               <AlertTriangle className="h-4 w-4 mr-2" />
               数据完整性检查
+            </Button>
+
+            <Button 
+              variant="destructive" 
+              className="w-full"
+              onClick={handleCleanupTempFiles}
+              disabled={isCleaningUp}
+            >
+              {isCleaningUp ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 mr-2" />
+              )}
+              清理临时文件
             </Button>
           </CardContent>
         </Card>

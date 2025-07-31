@@ -1,5 +1,16 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+export interface CaseSearchRequest {
+  page?: number
+  page_size?: number
+  org_name?: string
+  penalty_type?: string
+  date_start?: string
+  date_end?: string
+  keyword?: string
+  [key: string]: any
+}
+
 class ApiClient {
   private baseUrl: string
 
@@ -98,6 +109,34 @@ class ApiClient {
   // Admin - Get Case Detail Summary by Organization
   async getCaseDetailSummaryByOrg(orgName: string) {
     return this.request(`/api/v1/admin/case-detail-summary/${encodeURIComponent(orgName)}`)
+  }
+
+  // Admin - Get Case Details Progress
+  async getCaseDetailsProgress(orgName: string) {
+    return this.request(`/api/v1/admin/case-details-progress/${encodeURIComponent(orgName)}`)
+  }
+
+  // Admin - Cleanup Temp Files
+  async cleanupTempFiles() {
+    return this.request('/api/v1/admin/cleanup-temp-files', {
+      method: 'POST',
+    })
+  }
+
+  // Admin - Get Pending Cases for Update
+  async getPendingCases(orgName: string) {
+    return this.request(`/api/v1/admin/pending-cases/${encodeURIComponent(orgName)}`)
+  }
+
+  // Admin - Update Selected Case Details
+  async updateSelectedCaseDetails(orgName: string, selectedCaseIds: string[]) {
+    return this.request('/api/v1/admin/update-selected-case-details', {
+      method: 'POST',
+      body: JSON.stringify({
+        org_name: orgName,
+        selected_case_ids: selectedCaseIds
+      }),
+    })
   }
 
   // Admin - Refresh Data

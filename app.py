@@ -179,12 +179,25 @@ def main():
                                         and "标题" in row
                                         and "发布日期" in row
                                     ):
+                                        # Handle potential NaN values and ensure string conversion
+                                        doc_id = str(row['文档ID']) if pd.notna(row['文档ID']) else "N/A"
+                                        title = str(row['标题']) if pd.notna(row['标题']) else "N/A"
+                                        publish_date = str(row['发布日期']) if pd.notna(row['发布日期']) else "N/A"
+                                        
+                                        # Safely truncate title
+                                        title_display = title[:60] + "..." if len(title) > 60 else title
+                                        
                                         st.write(
-                                            f"**{row['文档ID']}** | {row['标题'][:60]}... | {row['发布日期']}"
+                                            f"**{doc_id}** | {title_display} | {publish_date}"
                                         )
                                     else:
+                                        # Fallback for missing columns
+                                        col0_val = str(row.iloc[0]) if pd.notna(row.iloc[0]) else "N/A"
+                                        col1_val = str(row.iloc[1]) if pd.notna(row.iloc[1]) else "N/A"
+                                        col1_display = col1_val[:60] + "..." if len(col1_val) > 60 else col1_val
+                                        
                                         st.write(
-                                            f"**{str(row.iloc[0])}** | {str(row.iloc[1])[:60]}..."
+                                            f"**{col0_val}** | {col1_display}"
                                         )
 
                             # Submit button for the form
