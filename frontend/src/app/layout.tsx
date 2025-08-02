@@ -18,15 +18,17 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="zh-CN">
-      <body className={inter.className}>
+    <html lang="en" className="h-full">
+      <body className={`${inter.className} h-full`}>
         <Providers>
-          <div className="min-h-screen">
+          <div className="min-h-screen h-full flex flex-col">
             <Header />
-            <div className="flex">
+            <div className="flex flex-1 h-full overflow-hidden">
               <Sidebar />
-              <main className="flex-1 min-h-[calc(100vh-5rem)] overflow-auto">
-                {children}
+              <main className="flex-1 overflow-auto relative">
+                <div className="min-h-full w-full">
+                  {children}
+                </div>
               </main>
             </div>
           </div>
