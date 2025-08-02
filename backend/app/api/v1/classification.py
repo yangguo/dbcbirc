@@ -4,6 +4,7 @@ import pandas as pd
 import io
 import os
 import json
+from datetime import datetime
 from pydantic import BaseModel
 import openai
 from app.core.config import settings
@@ -470,6 +471,90 @@ async def classify_text(request: ClassifyTextRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class SaveSuccessfulRecordsRequest(BaseModel):
+    results: List[dict]
+
+
+@router.post("/save-successful-records")
+async def save_successful_records(request: SaveSuccessfulRecordsRequest):
+    """保存成功的记录到两个CSV文件"""
+    try:
+        # 过滤出成功的记录
+        successful_records = [record for record in request.results if record.get("状态") == "成功"]
+        
+        if not successful_records:
+            raise HTTPException(status_code=400, detail="没有成功的记录可以保存")
+        
+        # 生成时间戳
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # 获取项目根目录下的cbirc文件夹路径
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+        cbirc_dir = os.path.join(project_root, "cbirc")
+        
+        # 确保cbirc目录存在
+        os.makedirs(cbirc_dir, exist_ok=True)
+        
+        # 准备第一个文件的数据 (cbircsplit)
+        split_data = []
+        for record in successful_records:
+            split_record = {
+                "wenhao": record.get("行政处罚决定书文号", ""),
+                "people": record.get("被处罚当事人", ""),
+                "event": record.get("主要违法违规事实", ""),
+                "law": record.get("行政处罚依据", ""),
+                "penalty": record.get("行政处罚决定", ""),
+                "org": record.get("作出处罚决定的机关名称", ""),
+                "date": record.get("作出处罚决定的日期", ""),
+                "id": record.get("原始ID", "")
+            }
+            split_data.append(split_record)
+        
+        # 准备第二个文件的数据 (cbirccat)
+        cat_data = []
+        for record in successful_records:
+            cat_record = {
+                "id": record.get("原始ID", ""),
+                "amount": record.get("罚没总金额", ""),
+                "industry": record.get("行业", ""),
+                "category": record.get("违规类型", ""),
+                "province": record.get("监管地区", "")
+            }
+            cat_data.append(cat_record)
+        
+        # 保存第一个文件
+        split_filename = f"cbircsplit{timestamp}.csv"
+        split_filepath = os.path.join(cbirc_dir, split_filename)
+        split_df = pd.DataFrame(split_data)
+        split_df.to_csv(split_filepath, index=False, encoding='utf-8-sig')
+        
+        # 保存第二个文件
+        cat_filename = f"cbirccat{timestamp}.csv"
+        cat_filepath = os.path.join(cbirc_dir, cat_filename)
+        cat_df = pd.DataFrame(cat_data)
+        cat_df.to_csv(cat_filepath, index=False, encoding='utf-8-sig')
+        
+        return {
+            "message": "成功记录已保存",
+            "successful_count": len(successful_records),
+            "files_created": [
+                {
+                    "filename": split_filename,
+                    "filepath": split_filepath,
+                    "records": len(split_data)
+                },
+                {
+                    "filename": cat_filename,
+                    "filepath": cat_filepath,
+                    "records": len(cat_data)
+                }
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存文件失败: {str(e)}")
 
 
 @router.post("/batch-extract-penalty-info")

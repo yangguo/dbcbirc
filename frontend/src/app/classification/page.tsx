@@ -199,6 +199,51 @@ export default function ClassificationPage() {
     })
   }
 
+  // 保存成功记录为两个文件
+  const downloadSuccessfulRecords = async () => {
+    const successfulRecords = batchResults.filter(record => record.状态 === '成功')
+    
+    if (successfulRecords.length === 0) {
+      toast({
+        title: '错误',
+        description: '没有成功的记录可保存',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/classification/save-successful-records', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          results: batchResults
+        })
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || '保存失败')
+      }
+      
+      const result = await response.json()
+      toast({
+        title: '成功',
+        description: `成功保存 ${result.successful_count} 条记录到 cbirc/ 目录下的以下文件:\n${result.files_created.map(file => file.filename).join('\n')}`,
+      })
+      
+    } catch (error) {
+      console.error('保存失败:', error)
+      toast({
+        title: '错误',
+        description: `保存失败: ${error.message}`,
+        variant: 'destructive',
+      })
+    }
+  }
+
   // 处罚信息提取
   const handleExtractPenaltyInfo = async () => {
     if (!textInput.trim()) {
@@ -1077,10 +1122,16 @@ export default function ClassificationPage() {
                       共 {batchResults.length} 条结果,成功 {batchResults.filter(r => r.状态 === '成功').length} 条,失败 {batchResults.filter(r => r.状态 === '失败').length} 条
                     </CardDescription>
                   </div>
-                  <Button onClick={downloadBatchResults} variant="outline">
-                    <Download className="mr-2 h-4 w-4" />
-                    下载CSV
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={downloadBatchResults} variant="outline">
+                      <Download className="mr-2 h-4 w-4" />
+                      下载CSV
+                    </Button>
+                    <Button onClick={downloadSuccessfulRecords} variant="outline">
+                      <Download className="mr-2 h-4 w-4" />
+                      保存成功记录
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
