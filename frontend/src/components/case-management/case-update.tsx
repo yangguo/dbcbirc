@@ -213,6 +213,22 @@ export function CaseUpdate() {
     setSelectedCaseIds([])
   }
 
+  const handleSelect100Cases = () => {
+    if (pendingCasesData) {
+      const allCaseIds = (pendingCasesData as any).pending_cases.map((c: any) => c.id)
+      const currentlySelected = new Set(selectedCaseIds)
+      
+      // Find unselected cases
+      const unselectedCases = allCaseIds.filter((id: string) => !currentlySelected.has(id))
+      
+      // Take up to 100 more unselected cases
+      const next100Cases = unselectedCases.slice(0, 100)
+      
+      // Add to existing selection
+      setSelectedCaseIds(prev => [...prev, ...next100Cases])
+    }
+  }
+
   const handleUpdateSelectedCases = () => {
     if (selectedCaseIds.length === 0) {
       toast({
@@ -607,6 +623,13 @@ export function CaseUpdate() {
                         onClick={handleSelectAllCases}
                       >
                         全选
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleSelect100Cases}
+                      >
+                        选择100个
                       </Button>
                       <Button 
                         variant="outline" 

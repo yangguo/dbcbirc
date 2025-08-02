@@ -120,10 +120,10 @@ export function CaseStats() {
               <div className="text-3xl font-bold text-foreground">
                 {card.format(stats?.[card.key as keyof typeof stats] as any)}
               </div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
                 <div className={`h-2 w-2 rounded-full bg-gradient-to-r ${card.gradient} animate-pulse`}></div>
                 {card.description}
-              </p>
+              </div>
             </div>
           </CardContent>
           
