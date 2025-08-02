@@ -999,27 +999,35 @@ async def _run_scrape_cases_with_tracking(task_id: str, org_name: str, start_pag
     try:
         task_service.start_task(task_id)
         
-        # Update progress periodically
-        total_pages = end_page - start_page + 1
-        
-        for i in range(total_pages):
-            current_page = start_page + i
-            progress = int((i / total_pages) * 100)
-            task_service.update_task_progress(task_id, progress)
-            
-            # Here you would call the actual scraping for this page
-            # For now, we'll simulate the work
-            await asyncio.sleep(1)  # Simulate work
-        
         # Run the actual scraping function
         result = await scraper_service.scrape_cases(org_name, start_page, end_page)
         
-        # Complete the task
-        task_service.complete_task(task_id, {
-            "total_pages": total_pages,
-            "org_name": org_name,
-            "status": "completed"
-        })
+        # Update progress based on result
+        if result.get("status") == "completed":
+            total_scraped = result.get("total_scraped", 0)
+            new_cases = result.get("new_cases", 0)
+            errors = result.get("errors", 0)
+            pages_processed = result.get("pages_processed", 0)
+            
+            # Set final progress to 100%
+            task_service.update_task_progress(task_id, 100)
+            
+            # Complete the task with detailed results
+            task_service.complete_task(task_id, {
+                "org_name": org_name,
+                "status": "completed",
+                "total": total_scraped,
+                "updated": new_cases,
+                "skipped": total_scraped - new_cases,
+                "pages_processed": pages_processed,
+                "total_scraped": total_scraped,
+                "new_cases": new_cases,
+                "errors": errors,
+                "message": result.get("message", f"Scraped {new_cases} new cases from {pages_processed} pages")
+            })
+        else:
+            # Handle error case
+            task_service.fail_task(task_id, result.get("message", "Scraping failed"))
         
     except Exception as e:
         task_service.fail_task(task_id, str(e))
@@ -1047,6 +1055,9 @@ async def _run_update_details_with_tracking(task_id: str, org_name: str):
             task_service.complete_task(task_id, {
                 "org_name": org_name,
                 "status": "completed",
+                "total": updated_cases + error_count,
+                "updated": updated_cases,
+                "skipped": error_count,
                 "updated_cases": updated_cases,
                 "error_count": error_count,
                 "temp_saves": temp_saves,
@@ -1084,6 +1095,9 @@ async def _run_selected_update_details_with_tracking(task_id: str, org_name: Org
             task_service.complete_task(task_id, {
                 "org_name": str(org_name),
                 "status": "completed",
+                "total": cases_to_update,
+                "updated": updated_cases,
+                "skipped": cases_to_update - updated_cases,
                 "requested_cases": requested_cases,
                 "cases_to_update": cases_to_update,
                 "updated_cases": updated_cases,
