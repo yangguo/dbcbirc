@@ -55,6 +55,11 @@ export default function ClassificationPage() {
   const [processing, setProcessing] = useState(false)
   const { toast } = useToast()
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [fileColumns, setFileColumns] = useState<string[]>([])
+  const [previewData, setPreviewData] = useState<any[]>([])
+  const [selectedIdColumn, setSelectedIdColumn] = useState<string>('')
+  const [selectedContentColumn, setSelectedContentColumn] = useState<string>('')
+  const [showColumnSelection, setShowColumnSelection] = useState(false)
   const [classificationData, setClassificationData] = useState<ClassificationData[]>([])
   const [stats, setStats] = useState<ClassificationStats>({
     total_cases: 0,
@@ -67,6 +72,9 @@ export default function ClassificationPage() {
   const [extractResult, setExtractResult] = useState<any>(null)
   const [displayMode, setDisplayMode] = useState<'json' | 'table'>('json')
   const [downloadLimit, setDownloadLimit] = useState<string>('all') // 'all', 'custom', or specific numbers
+  const [batchResults, setBatchResults] = useState<any[]>([])
+  const [processingLogs, setProcessingLogs] = useState<string[]>([])
+  const [showResults, setShowResults] = useState(false)
 
   // 获取分类统计数据
   useEffect(() => {
@@ -135,6 +143,54 @@ export default function ClassificationPage() {
     }
   }
 
+  // 下载批量提取结果为CSV
+  const downloadBatchResults = () => {
+    if (batchResults.length === 0) {
+      toast({
+        title: '错误',
+        description: '没有可下载的结果',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    // 创建CSV内容
+    const headers = [
+      '原始ID', '状态', '行政处罚决定书文号', '被处罚当事人', '主要违法违规事实',
+      '行政处罚依据', '行政处罚决定', '作出处罚决定的机关名称', '作出处罚决定的日期',
+      '行业', '罚没总金额', '违规类型', '监管地区'
+    ]
+    
+    const csvContent = [
+      headers.join(','),
+      ...batchResults.map(row => {
+        return headers.map(header => {
+          const value = row[header] || ''
+          // 处理包含逗号或引号的值
+          if (value.toString().includes(',') || value.toString().includes('"')) {
+            return `"${value.toString().replace(/"/g, '""')}"`
+          }
+          return value
+        }).join(',')
+      })
+    ].join('\n')
+
+    // 下载文件
+    const BOM = '\uFEFF'
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'penalty_extraction_results.csv'
+    a.click()
+    window.URL.revokeObjectURL(url)
+    
+    toast({
+      title: '成功',
+      description: '结果文件已下载',
+    })
+  }
+
   // 处罚信息提取
   const handleExtractPenaltyInfo = async () => {
     if (!textInput.trim()) {
@@ -185,7 +241,7 @@ export default function ClassificationPage() {
   }
 
   // 文件上传处理
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
@@ -205,10 +261,57 @@ export default function ClassificationPage() {
         return
       }
       setUploadedFile(file)
-      toast({
-        title: '成功',
-        description: `已选择文件: ${file.name}`,
-      })
+      
+      // 获取文件列信息
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/classification/get-file-columns', {
+          method: 'POST',
+          body: formData
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          setFileColumns(result.columns)
+          setPreviewData(result.preview_data)
+          setShowColumnSelection(true)
+          
+          // 自动选择可能的ID和内容列
+          const idCandidates = ['id', 'ID', '序号', '编号', 'index']
+          const contentCandidates = ['content', 'text', '内容', '文本', '正文', 'doc1']
+          
+          const idColumn = result.columns.find((col: string) => 
+            idCandidates.some(candidate => col.toLowerCase().includes(candidate.toLowerCase()))
+          ) || result.columns[0]
+          
+          const contentColumn = result.columns.find((col: string) => 
+            contentCandidates.some(candidate => col.toLowerCase().includes(candidate.toLowerCase()))
+          ) || result.columns[1] || result.columns[0]
+          
+          setSelectedIdColumn(idColumn)
+          setSelectedContentColumn(contentColumn)
+          
+          toast({
+            title: '成功',
+            description: `文件上传成功，共 ${result.total_rows} 行数据`,
+          })
+        } else {
+          toast({
+            title: '错误',
+            description: '无法读取文件列信息',
+            variant: 'destructive',
+          })
+        }
+      } catch (error) {
+        console.error('获取文件列信息失败:', error)
+        toast({
+          title: '错误',
+          description: '获取文件列信息失败',
+          variant: 'destructive',
+        })
+      }
     }
   }
 
@@ -223,9 +326,24 @@ export default function ClassificationPage() {
       return
     }
 
+    if (!selectedIdColumn || !selectedContentColumn) {
+      toast({
+        title: '错误',
+        description: '请选择ID字段和内容字段',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setProcessing(true)
+    setBatchResults([])
+    setProcessingLogs([])
+    setShowResults(false)
+    
     const formData = new FormData()
     formData.append('file', uploadedFile)
+    formData.append('id_column', selectedIdColumn)
+    formData.append('content_column', selectedContentColumn)
 
     try {
       const response = await fetch('http://localhost:8000/api/v1/classification/batch-extract-penalty-info', {
@@ -235,25 +353,19 @@ export default function ClassificationPage() {
 
       if (response.ok) {
         const result = await response.json()
+        setBatchResults(result.results || [])
+        setProcessingLogs(result.processing_logs || [])
+        setShowResults(true)
+        
         toast({
           title: '成功',
-          description: `批量提取完成，处理了 ${result.processed_count} 条记录`,
+          description: `批量提取完成，处理了 ${result.processed_count} 条记录，提取了 ${result.extracted_count} 条结果`,
         })
-        
-        // 下载结果文件
-        // 添加 BOM 以确保中文字符正确显示
-        const BOM = '\uFEFF'
-        const blob = new Blob([BOM + result.csv_data], { type: 'text/csv;charset=utf-8' })
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = 'penalty_extraction_results.csv'
-        a.click()
-        window.URL.revokeObjectURL(url)
       } else {
+        const errorData = await response.json()
         toast({
           title: '错误',
-          description: '批量提取失败，请稍后重试',
+          description: errorData.detail || '批量提取失败，请稍后重试',
           variant: 'destructive',
         })
       }
@@ -782,7 +894,7 @@ export default function ClassificationPage() {
                 批量处罚信息提取
               </CardTitle>
               <CardDescription>
-                上传CSV文件进行批量处罚信息提取
+                上传CSV或Excel文件进行批量处罚信息提取
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -794,12 +906,12 @@ export default function ClassificationPage() {
                     点击上传或拖拽文件到此处
                   </div>
                   <div className="text-xs text-muted-foreground mb-4">
-                    支持 CSV 格式文件，最大 10MB
+                    支持 CSV 和 Excel 格式文件，最大 10MB
                   </div>
                   <Input
                     id="file-upload"
                     type="file"
-                    accept=".csv"
+                    accept=".csv,.xlsx,.xls"
                     onChange={handleFileUpload}
                     className="hidden"
                   />
@@ -817,9 +929,96 @@ export default function ClassificationPage() {
                 </div>
               </div>
 
+              {/* 字段选择和数据预览 */}
+              {showColumnSelection && fileColumns.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">字段选择</CardTitle>
+                    <CardDescription>
+                      请选择ID字段和内容字段进行处罚信息提取
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="id-column">ID字段</Label>
+                        <Select value={selectedIdColumn} onValueChange={setSelectedIdColumn}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择ID字段" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {fileColumns.map((column) => (
+                              <SelectItem key={column} value={column}>
+                                {column}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="content-column">内容字段</Label>
+                        <Select value={selectedContentColumn} onValueChange={setSelectedContentColumn}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="选择内容字段" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {fileColumns.map((column) => (
+                              <SelectItem key={column} value={column}>
+                                {column}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* 数据预览 */}
+                    {previewData.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>数据预览</Label>
+                        <div className="border rounded-lg overflow-auto max-h-64">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                {fileColumns.map((column) => (
+                                  <TableHead key={column} className="min-w-[120px]">
+                                    {column}
+                                    {column === selectedIdColumn && (
+                                      <Badge variant="secondary" className="ml-2 text-xs">
+                                        ID
+                                      </Badge>
+                                    )}
+                                    {column === selectedContentColumn && (
+                                      <Badge variant="secondary" className="ml-2 text-xs">
+                                        内容
+                                      </Badge>
+                                    )}
+                                  </TableHead>
+                                ))}
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {previewData.map((row, index) => (
+                                <TableRow key={index}>
+                                  {fileColumns.map((column) => (
+                                    <TableCell key={column} className="max-w-[200px] truncate">
+                                      {String(row[column] || '')}
+                                    </TableCell>
+                                  ))}
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               <Button 
                 onClick={handleBatchExtract}
-                disabled={processing || !uploadedFile}
+                disabled={processing || !uploadedFile || !selectedIdColumn || !selectedContentColumn}
                 className="w-full"
               >
                 {processing ? (
@@ -836,6 +1035,138 @@ export default function ClassificationPage() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* 批量提取结果 */}
+          {showResults && batchResults.length > 0 && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <TableIcon className="h-5 w-5" />
+                      提取结果
+                    </CardTitle>
+                    <CardDescription>
+                      共 {batchResults.length} 条结果，成功 {batchResults.filter(r => r.状态 === '成功').length} 条，失败 {batchResults.filter(r => r.状态 === '失败').length} 条
+                    </CardDescription>
+                  </div>
+                  <Button onClick={downloadBatchResults} variant="outline">
+                    <Download className="mr-2 h-4 w-4" />
+                    下载CSV
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="border rounded-lg overflow-auto max-h-96">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="min-w-[80px]">原始ID</TableHead>
+                        <TableHead className="min-w-[60px]">状态</TableHead>
+                        <TableHead className="min-w-[120px]">被处罚当事人</TableHead>
+                        <TableHead className="min-w-[100px]">罚没金额</TableHead>
+                        <TableHead className="min-w-[80px]">行业</TableHead>
+                        <TableHead className="min-w-[120px]">决定机关</TableHead>
+                        <TableHead className="min-w-[80px]">违规类型</TableHead>
+                        <TableHead className="min-w-[200px]">主要违法事实</TableHead>
+                        <TableHead className="min-w-[150px]">处罚决定</TableHead>
+                        <TableHead className="min-w-[80px]">决定日期</TableHead>
+                        <TableHead className="min-w-[100px]">文号</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {batchResults.map((record: any, index: number) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">
+                            {record.原始ID || '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={record.状态 === '成功' ? 'default' : 'destructive'}>
+                              {record.状态}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="break-words max-w-[120px]">
+                              {record.被处罚当事人 || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-right">
+                              {record.罚没总金额 && record.罚没总金额 !== '0' 
+                                ? `${(parseInt(record.罚没总金额) / 10000).toLocaleString()}万元`
+                                : '-'
+                              }
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {record.行业 || '-'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="break-words max-w-[120px] text-xs">
+                              {record.作出处罚决定的机关名称 || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="break-words max-w-[80px] text-xs">
+                              {record.违规类型 || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="break-words max-w-[200px] text-xs">
+                              {record.主要违法违规事实 || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="break-words max-w-[150px] text-xs">
+                              {record.行政处罚决定 || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-xs">
+                              {record.作出处罚决定的日期 || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="break-words max-w-[100px] text-xs">
+                              {record.行政处罚决定书文号 || '-'}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 处理日志 */}
+          {showResults && processingLogs.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  处理日志
+                </CardTitle>
+                <CardDescription>
+                  详细的处理过程记录
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-muted rounded-lg p-4 max-h-64 overflow-auto">
+                  <div className="space-y-1 text-sm font-mono">
+                    {processingLogs.map((log, index) => (
+                      <div key={index} className="text-muted-foreground">
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>

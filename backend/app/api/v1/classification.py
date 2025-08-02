@@ -472,6 +472,126 @@ async def classify_text(request: ClassifyTextRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/batch-extract-penalty-info")
+async def batch_extract_penalty_info(
+    file: UploadFile = File(...),
+    id_column: str = Form("id"),
+    content_column: str = Form("content")
+):
+    """批量处罚信息提取"""
+    try:
+        # 验证文件类型
+        if not (file.filename.endswith('.csv') or file.filename.endswith('.xlsx')):
+            raise HTTPException(status_code=400, detail="只支持CSV和Excel文件")
+        
+        # 读取文件
+        contents = await file.read()
+        
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+        
+        # 检查必需的列是否存在
+        if id_column not in df.columns:
+            raise HTTPException(status_code=400, detail=f"文件中不存在列: {id_column}")
+        if content_column not in df.columns:
+            raise HTTPException(status_code=400, detail=f"文件中不存在列: {content_column}")
+        
+        # 批量提取处罚信息
+        results = []
+        processing_logs = []
+        
+        for index, row in df.iterrows():
+            record_id = str(row[id_column])
+            text = str(row[content_column])
+            
+            print(f"正在处理记录 {index + 1}/{len(df)}: ID={record_id}")
+            processing_logs.append(f"正在处理记录 {index + 1}/{len(df)}: ID={record_id}")
+            
+            # 调用处罚信息提取函数
+            extract_result = extract_penalty_info(text)
+            
+            if extract_result["success"] and extract_result["data"]:
+                # 为每个提取的记录添加原始ID
+                extracted_count = len(extract_result["data"])
+                print(f"记录 {record_id} 提取成功，提取到 {extracted_count} 条处罚信息")
+                processing_logs.append(f"记录 {record_id} 提取成功，提取到 {extracted_count} 条处罚信息")
+                
+                for penalty_record in extract_result["data"]:
+                    result_row = {
+                        "原始ID": record_id,
+                        "状态": "成功",
+                        **penalty_record
+                    }
+                    results.append(result_row)
+            else:
+                # 如果提取失败，创建一个错误记录
+                error_msg = extract_result.get("error", "未知错误")
+                print(f"记录 {record_id} 提取失败: {error_msg}")
+                processing_logs.append(f"记录 {record_id} 提取失败: {error_msg}")
+                
+                error_record = {
+                    "原始ID": record_id,
+                    "状态": "失败",
+                    "行政处罚决定书文号": "",
+                    "被处罚当事人": "提取失败",
+                    "主要违法违规事实": error_msg,
+                    "行政处罚依据": "",
+                    "行政处罚决定": "",
+                    "作出处罚决定的机关名称": "",
+                    "作出处罚决定的日期": "",
+                    "行业": "",
+                    "罚没总金额": "0",
+                    "违规类型": "",
+                    "监管地区": ""
+                }
+                results.append(error_record)
+        
+        print(f"批量提取完成，共处理 {len(df)} 条记录，提取到 {len(results)} 条结果")
+        
+        return {
+            "message": "批量处罚信息提取完成",
+            "processed_count": len(df),
+            "extracted_count": len(results),
+            "results": results,
+            "processing_logs": processing_logs
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"批量提取失败: {str(e)}")
+
+
+@router.post("/get-file-columns")
+async def get_file_columns(file: UploadFile = File(...)):
+    """获取上传文件的列名"""
+    try:
+        # 验证文件类型
+        if not (file.filename.endswith('.csv') or file.filename.endswith('.xlsx')):
+            raise HTTPException(status_code=400, detail="只支持CSV和Excel文件")
+        
+        # 读取文件
+        contents = await file.read()
+        
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+        
+        # 返回列名和前几行数据作为预览
+        columns = df.columns.tolist()
+        preview_data = df.head(3).to_dict('records')
+        
+        return {
+            "columns": columns,
+            "preview_data": preview_data,
+            "total_rows": len(df)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"读取文件失败: {str(e)}")
+
+
 @router.post("/batch-classify")
 async def batch_classify(
     file: UploadFile = File(...),
