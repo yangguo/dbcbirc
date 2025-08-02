@@ -576,7 +576,7 @@ export function CaseUpdate() {
       {showCaseSelection && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
-            <CardHeader>
+            <CardHeader className="flex-shrink-0">
               <CardTitle>选择要更新的案例</CardTitle>
               <CardDescription>
                 为 <strong>{selectedOrg}</strong> 选择需要更新详情的案例
@@ -591,7 +591,7 @@ export function CaseUpdate() {
                 </div>
               ) : pendingCasesData && (pendingCasesData as any).pending_cases.length > 0 ? (
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
+                  <div className="flex justify-between items-center p-4 bg-muted rounded-lg sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
                     <div className="text-sm">
                       共 <strong>{(pendingCasesData as any).total}</strong> 个案例待更新
                       {selectedCaseIds.length > 0 && (
@@ -615,6 +615,20 @@ export function CaseUpdate() {
                       >
                         取消全选
                       </Button>
+                      {selectedCaseIds.length > 0 && (
+                        <Button 
+                          size="sm" 
+                          onClick={handleUpdateSelectedCases}
+                          disabled={updateSelectedCaseDetailsMutation.isPending}
+                        >
+                          {updateSelectedCaseDetailsMutation.isPending ? (
+                            <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <FileText className="h-3 w-3 mr-1" />
+                          )}
+                          更新 ({selectedCaseIds.length})
+                        </Button>
+                      )}
                     </div>
                   </div>
 
@@ -667,27 +681,28 @@ export function CaseUpdate() {
                   <p className="text-sm mt-2">所有案例的详情都已更新完成</p>
                 </div>
               )}
-              
-              <div className="flex justify-end space-x-2 mt-6 pt-4 border-t">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowCaseSelection(false)}
-                >
-                  取消
-                </Button>
-                <Button 
-                  onClick={handleUpdateSelectedCases}
-                  disabled={selectedCaseIds.length === 0 || updateSelectedCaseDetailsMutation.isPending}
-                >
-                  {updateSelectedCaseDetailsMutation.isPending ? (
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <FileText className="h-4 w-4 mr-2" />
-                  )}
-                  更新选中案例 ({selectedCaseIds.length})
-                </Button>
-              </div>
             </CardContent>
+            
+            {/* Fixed bottom buttons */}
+            <div className="flex-shrink-0 flex justify-end space-x-2 p-6 pt-4 border-t bg-background">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowCaseSelection(false)}
+              >
+                取消
+              </Button>
+              <Button 
+                onClick={handleUpdateSelectedCases}
+                disabled={selectedCaseIds.length === 0 || updateSelectedCaseDetailsMutation.isPending}
+              >
+                {updateSelectedCaseDetailsMutation.isPending ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4 mr-2" />
+                )}
+                更新选中案例 ({selectedCaseIds.length})
+              </Button>
+            </div>
           </Card>
         </div>
       )}
