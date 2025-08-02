@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { 
   Tag, 
   Cpu, 
@@ -65,6 +66,7 @@ export default function ClassificationPage() {
   const [textInput, setTextInput] = useState('')
   const [extractResult, setExtractResult] = useState<any>(null)
   const [displayMode, setDisplayMode] = useState<'json' | 'table'>('json')
+  const [downloadLimit, setDownloadLimit] = useState<string>('all') // 'all', 'custom', or specific numbers
 
   // 获取分类统计数据
   useEffect(() => {
@@ -87,7 +89,14 @@ export default function ClassificationPage() {
   const handleGenerateLabels = async () => {
     setProcessing(true)
     try {
-      const response = await fetch('http://localhost:8000/api/v1/admin/generate-classification-data', {
+      // Prepare the URL with limit parameter if needed
+      let url = 'http://localhost:8000/api/v1/admin/generate-classification-data'
+      if (downloadLimit !== 'all') {
+        const limitValue = downloadLimit === 'custom' ? 1000 : parseInt(downloadLimit) // default to 1000 for custom
+        url += `?limit=${limitValue}`
+      }
+      
+      const response = await fetch(url, {
         method: 'POST'
       })
       
@@ -103,7 +112,9 @@ export default function ClassificationPage() {
         })
         toast({
           title: '成功',
-          description: `成功生成 ${data.uncategorized_cases || 0} 条待分类案例`,
+          description: downloadLimit === 'all' 
+            ? `成功生成全部 ${data.data?.length || 0} 条待分类案例`
+            : `成功生成前 ${data.data?.length || 0} 条待分类案例 (限制: ${downloadLimit} 条)`,
         })
       } else {
         toast({
@@ -269,6 +280,12 @@ export default function ClassificationPage() {
       return
     }
 
+    // Show info about the download
+    toast({
+      title: '下载开始',
+      description: `正在下载 ${classificationData.length} 条待分类案例数据`,
+    })
+
     const csvContent = [
       'ID,标题,发布日期,内容',
       ...classificationData.map(item => 
@@ -282,9 +299,16 @@ export default function ClassificationPage() {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'classification_data.csv'
+    const limitLabel = downloadLimit === 'all' ? 'all' : `top${downloadLimit}`
+    a.download = `cbirc_待分类案例_${limitLabel}_${classificationData.length}条_${new Date().toISOString().split('T')[0]}.csv`
     a.click()
     window.URL.revokeObjectURL(url)
+    
+    // Success notification
+    toast({
+      title: '下载完成',
+      description: `已成功下载 ${classificationData.length} 条案例数据到 CSV 文件`,
+    })
   }
 
   return (
@@ -379,6 +403,45 @@ export default function ClassificationPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Download Limit Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="downloadLimit">下载数量限制</Label>
+                <Select value={downloadLimit} onValueChange={setDownloadLimit}>
+                  <SelectTrigger className="w-full max-w-md mx-auto">
+                    <SelectValue placeholder="选择下载数量" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部案例 (推荐)</SelectItem>
+                    <SelectItem value="50">前 50 条 - 快速预览</SelectItem>
+                    <SelectItem value="100">前 100 条 - 小批量</SelectItem>
+                    <SelectItem value="500">前 500 条 - 中等批量</SelectItem>
+                    <SelectItem value="1000">前 1000 条 - 大批量</SelectItem>
+                    <SelectItem value="2000">前 2000 条 - 超大批量</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground text-center">
+                  选择要生成和下载的案例数量。"全部案例"将处理所有可用的待分类案例，<br />
+                  限制数量选项适用于快速预览或分批处理大量案例。
+                </p>
+              </div>
+
+              {/* Current Configuration Status */}
+              {stats.uncategorized_cases > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 text-blue-800">
+                    <Tag className="h-4 w-4" />
+                    <span className="text-sm font-medium">当前配置</span>
+                  </div>
+                  <div className="text-xs text-blue-600 mt-1">
+                    系统中有 <strong>{stats.uncategorized_cases}</strong> 条待分类案例。
+                    {downloadLimit === 'all' 
+                      ? ' 将生成并下载全部案例。'
+                      : ` 将生成并下载前 ${downloadLimit} 条案例。`
+                    }
+                  </div>
+                </div>
+              )}
+
               <div className="text-center">
                 <Button 
                   onClick={handleGenerateLabels}
@@ -423,7 +486,12 @@ export default function ClassificationPage() {
                         <div className="font-medium text-green-900">数据生成完成</div>
                       </div>
                       <div className="text-sm text-green-700">
-                        共找到 {stats.uncategorized_cases} 条待分类案例，已分类 {stats.categorized_cases} 条案例
+                        {downloadLimit === 'all' 
+                          ? `共找到 ${stats.uncategorized_cases} 条待分类案例，已生成全部 ${classificationData.length} 条案例用于下载`
+                          : `共找到 ${stats.uncategorized_cases} 条待分类案例，已生成前 ${classificationData.length} 条案例用于下载`
+                        }
+                        <br />
+                        已分类案例: {stats.categorized_cases} 条
                       </div>
                       <Button 
                         onClick={downloadClassificationData}
@@ -432,7 +500,7 @@ export default function ClassificationPage() {
                         className="border-green-300 text-green-700 hover:bg-green-100"
                       >
                         <Download className="mr-2 h-4 w-4" />
-                        下载待分类数据 (CSV)
+                        下载待分类数据 ({classificationData.length} 条) (CSV)
                       </Button>
                     </div>
                   </CardContent>

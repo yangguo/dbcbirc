@@ -699,7 +699,7 @@ async def get_classification_stats():
 
 
 @router.post("/generate-classification-data")
-async def generate_classification_data():
+async def generate_classification_data(limit: Optional[int] = Query(None, description="Maximum number of cases to return")):
     """Generate data for case classification"""
     try:
         # Get CBIRC detail data (all organizations)
@@ -742,7 +742,8 @@ async def generate_classification_data():
         
         # Convert to list of dictionaries for JSON response
         cases_data = []
-        for _, row in uncategorized_df.head(50).iterrows():  # Return first 50 uncategorized cases
+        df_to_iterate = uncategorized_df.head(limit) if limit else uncategorized_df
+        for _, row in df_to_iterate.iterrows():  # Return all or limited uncategorized cases
             case_dict = {
                 "id": row["id"],
                 "title": row["标题"],
