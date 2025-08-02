@@ -165,7 +165,15 @@ export default function ClassificationPage() {
       headers.join(','),
       ...batchResults.map(row => {
         return headers.map(header => {
-          const value = row[header] || ''
+          let value = row[header] || ''
+          
+          // 特殊处理罚没总金额字段，确保为纯数字
+          if (header === '罚没总金额' && value && value !== '0') {
+            // 如果值是字符串且包含数字，提取数字部分
+            const numericValue = typeof value === 'string' ? value.replace(/[^0-9.]/g, '') : value
+            value = numericValue || '0'
+          }
+          
           // 处理包含逗号或引号的值
           if (value.toString().includes(',') || value.toString().includes('"')) {
             return `"${value.toString().replace(/"/g, '""')}"`
@@ -701,12 +709,12 @@ export default function ClassificationPage() {
                             size="sm"
                             onClick={() => {
                               // Convert table data to CSV and download
-                              const headers = ['被处罚当事人', '罚没金额(万元)', '行业', '监管机关', '违规类型', '主要违法事实', '处罚决定', '决定日期', '文号'];
+                              const headers = ['被处罚当事人', '罚没总金额', '行业', '监管机关', '违规类型', '主要违法事实', '处罚决定', '决定日期', '行政处罚决定书文号'];
                               const csvData = [
                                 headers.join(','),
                                 ...extractResult.data.map((record: any) => [
                                   `"${record.被处罚当事人 || ''}"`,
-                                  record.罚没总金额 && record.罚没总金额 !== '0' ? (parseInt(record.罚没总金额) / 10000).toString() : '0',
+                                  record.罚没总金额 && record.罚没总金额 !== '0' ? parseInt(record.罚没总金额).toString() : '0',
                                   `"${record.行业 || ''}"`,
                                   `"${record.作出处罚决定的机关名称 || ''}"`,
                                   `"${record.违规类型 || ''}"`,
@@ -793,46 +801,30 @@ export default function ClassificationPage() {
                             <Table>
                               <TableHeader>
                                 <TableRow>
+                                  <TableHead className="min-w-[100px]">行政处罚决定书文号</TableHead>
                                   <TableHead className="min-w-[120px]">被处罚当事人</TableHead>
-                                  <TableHead className="min-w-[100px]">罚没金额</TableHead>
+                                  <TableHead className="min-w-[200px]">主要违法违规事实</TableHead>
+                                  <TableHead className="min-w-[120px]">行政处罚依据</TableHead>
+                                  <TableHead className="min-w-[150px]">行政处罚决定</TableHead>
+                                  <TableHead className="min-w-[120px]">作出处罚决定的机关名称</TableHead>
+                                  <TableHead className="min-w-[80px]">作出处罚决定的日期</TableHead>
                                   <TableHead className="min-w-[80px]">行业</TableHead>
-                                  <TableHead className="min-w-[100px]">监管机关</TableHead>
+                                  <TableHead className="min-w-[100px]">罚没总金额</TableHead>
                                   <TableHead className="min-w-[80px]">违规类型</TableHead>
-                                  <TableHead className="min-w-[200px]">主要违法事实</TableHead>
-                                  <TableHead className="min-w-[150px]">处罚决定</TableHead>
-                                  <TableHead className="min-w-[80px]">决定日期</TableHead>
-                                  <TableHead className="min-w-[100px]">文号</TableHead>
+                                  <TableHead className="min-w-[80px]">监管地区</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {Array.isArray(extractResult.data) ? extractResult.data.map((record: any, index: number) => (
                                   <TableRow key={index}>
+                                    <TableCell>
+                                      <div className="break-words max-w-[100px] text-xs">
+                                        {record.行政处罚决定书文号 || '-'}
+                                      </div>
+                                    </TableCell>
                                     <TableCell className="font-medium">
                                       <div className="break-words max-w-[120px]">
                                         {record.被处罚当事人 || '-'}
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="text-right">
-                                        {record.罚没总金额 && record.罚没总金额 !== '0' 
-                                          ? `${(parseInt(record.罚没总金额) / 10000).toLocaleString()}万元`
-                                          : '-'
-                                        }
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge variant="outline" className="text-xs">
-                                        {record.行业 || '-'}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="break-words max-w-[100px] text-xs">
-                                        {record.作出处罚决定的机关名称 || '-'}
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="break-words max-w-[80px] text-xs">
-                                        {record.违规类型 || '-'}
                                       </div>
                                     </TableCell>
                                     <TableCell>
@@ -841,8 +833,18 @@ export default function ClassificationPage() {
                                       </div>
                                     </TableCell>
                                     <TableCell>
+                                      <div className="break-words max-w-[120px] text-xs">
+                                        {record.行政处罚依据 || '-'}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
                                       <div className="break-words max-w-[150px] text-xs">
                                         {record.行政处罚决定 || '-'}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="break-words max-w-[120px] text-xs">
+                                        {record.作出处罚决定的机关名称 || '-'}
                                       </div>
                                     </TableCell>
                                     <TableCell>
@@ -851,14 +853,32 @@ export default function ClassificationPage() {
                                       </div>
                                     </TableCell>
                                     <TableCell>
-                                      <div className="break-words max-w-[100px] text-xs">
-                                        {record.行政处罚决定书文号 || '-'}
+                                      <Badge variant="outline" className="text-xs">
+                                        {record.行业 || '-'}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="text-right">
+                                        {record.罚没总金额 && record.罚没总金额 !== '0' 
+                                          ? parseInt(record.罚没总金额).toLocaleString()
+                                          : '-'
+                                        }
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="break-words max-w-[80px] text-xs">
+                                        {record.违规类型 || '-'}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="break-words max-w-[80px] text-xs">
+                                        {record.监管地区 || '-'}
                                       </div>
                                     </TableCell>
                                   </TableRow>
                                 )) : (
                                   <TableRow>
-                                    <TableCell colSpan={9} className="text-center text-muted-foreground">
+                                    <TableCell colSpan={11} className="text-center text-muted-foreground">
                                       数据格式错误或无数据
                                     </TableCell>
                                   </TableRow>
@@ -1063,15 +1083,17 @@ export default function ClassificationPage() {
                       <TableRow>
                         <TableHead className="min-w-[80px]">原始ID</TableHead>
                         <TableHead className="min-w-[60px]">状态</TableHead>
+                        <TableHead className="min-w-[100px]">行政处罚决定书文号</TableHead>
                         <TableHead className="min-w-[120px]">被处罚当事人</TableHead>
-                        <TableHead className="min-w-[100px]">罚没金额</TableHead>
+                        <TableHead className="min-w-[200px]">主要违法违规事实</TableHead>
+                        <TableHead className="min-w-[120px]">行政处罚依据</TableHead>
+                        <TableHead className="min-w-[150px]">行政处罚决定</TableHead>
+                        <TableHead className="min-w-[120px]">作出处罚决定的机关名称</TableHead>
+                        <TableHead className="min-w-[80px]">作出处罚决定的日期</TableHead>
                         <TableHead className="min-w-[80px]">行业</TableHead>
-                        <TableHead className="min-w-[120px]">决定机关</TableHead>
+                        <TableHead className="min-w-[100px]">罚没总金额</TableHead>
                         <TableHead className="min-w-[80px]">违规类型</TableHead>
-                        <TableHead className="min-w-[200px]">主要违法事实</TableHead>
-                        <TableHead className="min-w-[150px]">处罚决定</TableHead>
-                        <TableHead className="min-w-[80px]">决定日期</TableHead>
-                        <TableHead className="min-w-[100px]">文号</TableHead>
+                        <TableHead className="min-w-[80px]">监管地区</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1086,31 +1108,13 @@ export default function ClassificationPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
+                            <div className="break-words max-w-[100px] text-xs">
+                              {record.行政处罚决定书文号 || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
                             <div className="break-words max-w-[120px]">
                               {record.被处罚当事人 || '-'}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-right">
-                              {record.罚没总金额 && record.罚没总金额 !== '0' 
-                                ? `${(parseInt(record.罚没总金额) / 10000).toLocaleString()}万元`
-                                : '-'
-                              }
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {record.行业 || '-'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="break-words max-w-[120px] text-xs">
-                              {record.作出处罚决定的机关名称 || '-'}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="break-words max-w-[80px] text-xs">
-                              {record.违规类型 || '-'}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -1119,8 +1123,18 @@ export default function ClassificationPage() {
                             </div>
                           </TableCell>
                           <TableCell>
+                            <div className="break-words max-w-[120px] text-xs">
+                              {record.行政处罚依据 || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
                             <div className="break-words max-w-[150px] text-xs">
                               {record.行政处罚决定 || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="break-words max-w-[120px] text-xs">
+                              {record.作出处罚决定的机关名称 || '-'}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -1129,8 +1143,26 @@ export default function ClassificationPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div className="break-words max-w-[100px] text-xs">
-                              {record.行政处罚决定书文号 || '-'}
+                            <Badge variant="outline" className="text-xs">
+                              {record.行业 || '-'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-right">
+                              {record.罚没总金额 && record.罚没总金额 !== '0' 
+                                ? parseInt(record.罚没总金额).toLocaleString()
+                                : '-'
+                              }
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="break-words max-w-[80px] text-xs">
+                              {record.违规类型 || '-'}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="break-words max-w-[80px] text-xs">
+                              {record.监管地区 || '-'}
                             </div>
                           </TableCell>
                         </TableRow>
