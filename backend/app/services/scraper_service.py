@@ -400,7 +400,7 @@ class ScraperService:
             print(f"Error fetching detail for case {case_id}: {e}")
             raise
         
-    async def scrape_cases(self, org_name: OrganizationType, start_page: int, end_page: int):
+    async def scrape_cases(self, org_name: OrganizationType, start_page: int, end_page: int, task_id: str = None):
         """Scrape cases from NFRA website - completely self-contained implementation"""
         try:
             print(f"=== SCRAPE_CASES START ===")
@@ -421,6 +421,7 @@ class ScraperService:
             
             all_cases = []
             errors = []
+            total_pages = end_page - start_page + 1
             
             async with aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=30),
@@ -428,7 +429,7 @@ class ScraperService:
             ) as session:
                 
                 # Fetch summary pages
-                for page_num in range(start_page, end_page + 1):
+                for page_index, page_num in enumerate(range(start_page, end_page + 1)):
                     print(f"\n--- Processing summary page {page_num} ---")
                     
                     try:
@@ -437,6 +438,13 @@ class ScraperService:
                         
                         if cases_on_page:
                             all_cases.extend(cases_on_page)
+                        
+                        # Update progress if task_id is provided
+                        if task_id:
+                            progress = int((page_index + 1) / total_pages * 70)  # Reserve 30% for processing
+                            from app.services.task_service import task_service
+                            task_service.update_task_progress(task_id, progress)
+                            print(f"Updated task progress: {progress}%")
                             
                         # Rate limiting
                         delay = random.uniform(1, 3)
@@ -451,6 +459,12 @@ class ScraperService:
             print(f"\n--- Summary Phase Complete ---")
             print(f"Total cases scraped: {len(all_cases)}")
             print(f"Errors: {len(errors)}")
+            
+            # Update progress to 75% after scraping
+            if task_id:
+                from app.services.task_service import task_service
+                task_service.update_task_progress(task_id, 75)
+                print("Updated task progress: 75% (starting deduplication)")
             
             if not all_cases:
                 return {
@@ -467,11 +481,23 @@ class ScraperService:
             deduplicated_cases = self._deduplicate_cases(all_cases, all_existing_cases)
             print(f"After deduplication: {len(deduplicated_cases)} unique cases")
             
+            # Update progress to 85% after deduplication
+            if task_id:
+                from app.services.task_service import task_service
+                task_service.update_task_progress(task_id, 85)
+                print("Updated task progress: 85% (saving data)")
+            
             # Save deduplicated summary data to CSV
             if deduplicated_cases:
                 df_summary = pd.DataFrame(deduplicated_cases)
                 summary_filename = f"cbircsum{org_name_str}_{self._get_timestamp()}"
                 self._save_to_csv(df_summary, summary_filename)
+            
+            # Update progress to 95% after CSV save
+            if task_id:
+                from app.services.task_service import task_service
+                task_service.update_task_progress(task_id, 95)
+                print("Updated task progress: 95% (saving to database)")
             
             # Save to database - only new cases
             new_cases_saved = await self._save_to_database(deduplicated_cases, org_name)
@@ -589,7 +615,7 @@ class ScraperService:
                 "error": str(e)
             }
 
-    async def update_case_details(self, org_name: OrganizationType):
+    async def update_case_details(self, org_name: OrganizationType, task_id: str = None):
         """Update case details from existing summary data - works with CSV files"""
         try:
             print(f"Starting case details update for {org_name}")
@@ -689,6 +715,7 @@ class ScraperService:
             doc_ids = cases_to_update['docId'].tolist()
             detail_results = []
             error_count = 0
+            total_cases = len(doc_ids)
             
             # Create temporary file for saving progress
             timestamp = self._get_timestamp()
@@ -725,6 +752,13 @@ class ScraperService:
                                 temp_filepath = self._save_to_csv(temp_df, temp_filename)
                                 print(f"Saved {len(detail_results)} records to temporary file: {temp_filepath}")
                         
+                        # Update progress if task_id is provided
+                        if task_id:
+                            progress = int((i + 1) / total_cases * 90)  # Reserve 10% for final processing
+                            from app.services.task_service import task_service
+                            task_service.update_task_progress(task_id, progress)
+                            print(f"Updated task progress: {progress}%")
+                        
                         # Add delay between requests
                         if i < len(doc_ids) - 1:  # Don't delay after the last request
                             await asyncio.sleep(random.uniform(1, 3))
@@ -733,6 +767,12 @@ class ScraperService:
                         print(f"Error fetching detail for {doc_id}: {e}")
                         error_count += 1
                         continue
+            
+            # Update progress to 95% before final processing
+            if task_id:
+                from app.services.task_service import task_service
+                task_service.update_task_progress(task_id, 95)
+                print("Updated task progress: 95% (starting final processing)")
             
             # Save results to CSV
             updated_cases = 0
@@ -1182,7 +1222,7 @@ class ScraperService:
             print(f"Error getting pending cases: {e}")
             return []
 
-    async def update_selected_case_details(self, org_name: OrganizationType, selected_case_ids: List[str]):
+    async def update_selected_case_details(self, org_name: OrganizationType, selected_case_ids: List[str], task_id: str = None):
         """Update case details for selected cases only"""
         try:
             print(f"Starting selected case details update for {org_name}")
@@ -1263,6 +1303,7 @@ class ScraperService:
             doc_ids = cases_to_update['docId'].tolist()
             detail_results = []
             error_count = 0
+            total_cases = len(doc_ids)
             
             # Create temporary file for saving progress
             timestamp = self._get_timestamp()
@@ -1296,6 +1337,13 @@ class ScraperService:
                             print(f"DEBUG: Doc field contains HTML tags: {'<' in cleaned_content and '>' in cleaned_content}")
                             print(f"DEBUG: Doc field length: {len(cleaned_content)}")
                         
+                        # Update progress if task_id is provided
+                        if task_id:
+                            progress = int((i + 1) / total_cases * 90)  # Reserve 10% for final processing
+                            from app.services.task_service import task_service
+                            task_service.update_task_progress(task_id, progress)
+                            print(f"Updated task progress: {progress}%")
+                        
                         # Save temporary progress every few records
                         if len(detail_results) % temp_batch_size == 0 and detail_results:
                             temp_df = pd.DataFrame(detail_results)
@@ -1311,6 +1359,12 @@ class ScraperService:
                         error_count += 1
                         print(f"✗ Error fetching details for case {doc_id}: {e}")
                         continue
+            
+            # Update progress to 95% before final processing
+            if task_id:
+                from app.services.task_service import task_service
+                task_service.update_task_progress(task_id, 95)
+                print("Updated task progress: 95% (starting final processing)")
             
             # Save final results to CSV
             updated_cases = 0

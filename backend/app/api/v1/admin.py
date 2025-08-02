@@ -205,7 +205,7 @@ async def scrape_direct(
     try:
         # Add background task for direct scraping
         background_tasks.add_task(
-            scraper_service.scrape_cases_direct,
+            scraper_service.scrape_cases,
             update_request.org_name,
             update_request.start_page,
             update_request.end_page
@@ -999,8 +999,8 @@ async def _run_scrape_cases_with_tracking(task_id: str, org_name: str, start_pag
     try:
         task_service.start_task(task_id)
         
-        # Run the actual scraping function
-        result = await scraper_service.scrape_cases(org_name, start_page, end_page)
+        # Run the actual scraping function with task_id for progress tracking
+        result = await scraper_service.scrape_cases(org_name, start_page, end_page, task_id=task_id)
         
         # Update progress based on result
         if result.get("status") == "completed":
@@ -1039,8 +1039,8 @@ async def _run_update_details_with_tracking(task_id: str, org_name: str):
     try:
         task_service.start_task(task_id)
         
-        # Run the actual update function
-        result = await scraper_service.update_case_details(org_name)
+        # Run the actual update function with task_id for progress tracking
+        result = await scraper_service.update_case_details(org_name, task_id=task_id)
         
         # Update progress based on result
         if result.get("status") == "completed":
@@ -1077,8 +1077,8 @@ async def _run_selected_update_details_with_tracking(task_id: str, org_name: Org
     try:
         task_service.start_task(task_id)
         
-        # Run the actual update function for selected cases
-        result = await scraper_service.update_selected_case_details(org_name, selected_case_ids)
+        # Run the actual update function for selected cases with task_id for progress tracking
+        result = await scraper_service.update_selected_case_details(org_name, selected_case_ids, task_id=task_id)
         
         # Update progress based on result
         if result.get("status") == "completed":
