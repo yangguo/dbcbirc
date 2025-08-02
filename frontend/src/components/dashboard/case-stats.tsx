@@ -66,13 +66,13 @@ export function CaseStats() {
           <Card key={i} className="card-hover animate-pulse">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <div className="h-4 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-24"></div>
+                <div className="h-4 bg-gradient-to-r from-muted to-muted/80 rounded w-24"></div>
                 <div className={`p-2 rounded-lg bg-gradient-to-r ${card.bgGradient}`}>
-                  <card.icon className="h-5 w-5 text-gray-400" />
+                  <card.icon className="h-5 w-5 text-muted-foreground" />
                 </div>
               </div>
-              <div className="h-8 bg-gradient-to-r from-gray-200 to-gray-300 rounded mb-2"></div>
-              <div className="h-3 bg-gradient-to-r from-gray-200 to-gray-300 rounded w-20"></div>
+              <div className="h-8 bg-gradient-to-r from-muted to-muted/80 rounded mb-2"></div>
+              <div className="h-3 bg-gradient-to-r from-muted to-muted/80 rounded w-20"></div>
             </CardContent>
           </Card>
         ))}

@@ -305,7 +305,7 @@ export function CaseList() {
                         type="checkbox"
                         checked={selectedCases.includes(case_.id)}
                         onChange={() => handleSelectCase(case_.id)}
-                        className="rounded border-gray-300"
+                        className="rounded border-border"
                       />
                     </TableCell>
                     <TableCell className="font-medium max-w-xs truncate">

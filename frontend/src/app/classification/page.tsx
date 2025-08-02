@@ -427,7 +427,7 @@ export default function ClassificationPage() {
 
               {/* Current Configuration Status */}
               {stats.uncategorized_cases > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="bg-muted/30 border border-border rounded-lg p-3">
                   <div className="flex items-center gap-2 text-blue-800">
                     <Tag className="h-4 w-4" />
                     <span className="text-sm font-medium">当前配置</span>
@@ -464,7 +464,7 @@ export default function ClassificationPage() {
               </div>
 
               {processing && (
-                <Card className="bg-blue-50 border-blue-200">
+                <Card className="bg-muted/30 border-border">
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-3">
                       <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
@@ -478,7 +478,7 @@ export default function ClassificationPage() {
               )}
               
               {classificationData.length > 0 && !processing && (
-                <Card className="bg-green-50 border-green-200">
+                <Card className="bg-green-50/50 border-green-200/50">
                   <CardContent className="pt-6">
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
@@ -497,7 +497,7 @@ export default function ClassificationPage() {
                         onClick={downloadClassificationData}
                         variant="outline"
                         size="sm"
-                        className="border-green-300 text-green-700 hover:bg-green-100"
+                        className="border-green-300 text-green-700 hover:bg-green-100/50"
                       >
                         <Download className="mr-2 h-4 w-4" />
                         下载待分类数据 ({classificationData.length} 条) (CSV)
@@ -560,7 +560,7 @@ export default function ClassificationPage() {
               </Button>
 
               {extractResult && (
-                <Card className="bg-gray-50">
+                <Card className="bg-muted/50">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">提取结果</CardTitle>
@@ -624,7 +624,7 @@ export default function ClassificationPage() {
                   </CardHeader>
                   <CardContent>
                     {!extractResult.success && extractResult.error && (
-                      <div className="text-red-600 bg-red-50 p-3 rounded border mb-4">
+                      <div className="text-red-600 bg-red-50/50 p-3 rounded border mb-4">
                         错误: {extractResult.error}
                       </div>
                     )}
@@ -633,15 +633,15 @@ export default function ClassificationPage() {
                       <div className="space-y-4">
                         {/* Summary Section for Table Mode */}
                         {displayMode === 'table' && Array.isArray(extractResult.data) && (
-                          <div className="bg-blue-50 p-4 rounded-lg border">
+                          <div className="bg-muted/30 p-4 rounded-lg border">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                               <div>
-                                <span className="text-gray-600">记录数量:</span>
+                                <span className="text-muted-foreground">记录数量:</span>
                                 <span className="ml-2 font-semibold">{extractResult.data.length}</span>
                               </div>
                               <div>
-                                <span className="text-gray-600">总罚没金额:</span>
-                                <span className="ml-2 font-semibold text-red-600">
+                                <span className="text-muted-foreground">总罚没金额:</span>
+                                <span className="ml-2 font-semibold text-destructive">
                                   {extractResult.data.reduce((total: number, record: any) => {
                                     const amount = parseInt(record.罚没总金额 || '0');
                                     return total + amount;
@@ -655,13 +655,13 @@ export default function ClassificationPage() {
                                 </span>
                               </div>
                               <div>
-                                <span className="text-gray-600">涉及行业:</span>
+                                <span className="text-muted-foreground">涉及行业:</span>
                                 <span className="ml-2 font-semibold">
                                   {Array.from(new Set(extractResult.data.map((record: any) => record.行业).filter(Boolean))).length || 0}
                                 </span>
                               </div>
                               <div>
-                                <span className="text-gray-600">监管机关:</span>
+                                <span className="text-muted-foreground">监管机关:</span>
                                 <span className="ml-2 font-semibold">
                                   {Array.from(new Set(extractResult.data.map((record: any) => record.作出处罚决定的机关名称).filter(Boolean))).length || 0}
                                 </span>
@@ -671,7 +671,7 @@ export default function ClassificationPage() {
                         )}
                         
                         {displayMode === 'json' && (
-                          <div className="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-auto">
+                          <div className="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-auto">
                             <pre>{JSON.stringify(extractResult.data, null, 2)}</pre>
                           </div>
                         )}
@@ -746,7 +746,7 @@ export default function ClassificationPage() {
                                   </TableRow>
                                 )) : (
                                   <TableRow>
-                                    <TableCell colSpan={9} className="text-center text-gray-500">
+                                    <TableCell colSpan={9} className="text-center text-muted-foreground">
                                       数据格式错误或无数据
                                     </TableCell>
                                   </TableRow>
@@ -788,12 +788,12 @@ export default function ClassificationPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="file-upload">上传文件</Label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-                  <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <div className="text-sm text-gray-600 mb-2">
+                <div className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-muted-foreground transition-colors">
+                  <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                  <div className="text-sm text-muted-foreground mb-2">
                     点击上传或拖拽文件到此处
                   </div>
-                  <div className="text-xs text-gray-500 mb-4">
+                  <div className="text-xs text-muted-foreground mb-4">
                     支持 CSV 格式文件，最大 10MB
                   </div>
                   <Input
@@ -810,7 +810,7 @@ export default function ClassificationPage() {
                     选择文件
                   </Button>
                   {uploadedFile && (
-                    <div className="mt-2 text-sm text-gray-600">
+                    <div className="mt-2 text-sm text-muted-foreground">
                       已选择: {uploadedFile.name}
                     </div>
                   )}

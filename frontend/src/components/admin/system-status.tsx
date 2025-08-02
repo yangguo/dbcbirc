@@ -58,7 +58,7 @@ export function SystemStatus() {
       case 'running':
         return <Clock className="h-5 w-5 text-blue-500" />
       default:
-        return <Clock className="h-5 w-5 text-gray-500" />
+        return <Clock className="h-5 w-5 text-muted-foreground" />
     }
   }
 

@@ -320,7 +320,7 @@ export function CaseCategories() {
                   <span>{stat.category}</span>
                   <span>{stat.count} 个案例</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-muted rounded-full h-2">
                   <div 
                     className="bg-blue-600 h-2 rounded-full" 
                     style={{ width: `${stat.percentage}%` }}
