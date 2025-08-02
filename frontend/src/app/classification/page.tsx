@@ -127,7 +127,7 @@ export default function ClassificationPage() {
       } else {
         toast({
           title: '错误',
-          description: '生成失败，请稍后重试',
+          description: '生成失败,请稍后重试',
           variant: 'destructive',
         })
       }
@@ -135,7 +135,7 @@ export default function ClassificationPage() {
       console.error('生成分类数据失败:', error)
       toast({
         title: '错误',
-        description: '生成失败，请检查网络连接',
+        description: '生成失败,请检查网络连接',
         variant: 'destructive',
       })
     } finally {
@@ -167,9 +167,9 @@ export default function ClassificationPage() {
         return headers.map(header => {
           let value = row[header] || ''
           
-          // 特殊处理罚没总金额字段，确保为纯数字
+          // 特殊处理罚没总金额字段,确保为纯数字
           if (header === '罚没总金额' && value && value !== '0') {
-            // 如果值是字符串且包含数字，提取数字部分
+            // 如果值是字符串且包含数字,提取数字部分
             const numericValue = typeof value === 'string' ? value.replace(/[^0-9.]/g, '') : value
             value = numericValue || '0'
           }
@@ -232,7 +232,7 @@ export default function ClassificationPage() {
       } else {
         toast({
           title: '错误',
-          description: '信息提取失败，请稍后重试',
+          description: '信息提取失败,请稍后重试',
           variant: 'destructive',
         })
       }
@@ -240,7 +240,7 @@ export default function ClassificationPage() {
       console.error('信息提取失败:', error)
       toast({
         title: '错误',
-        description: '信息提取失败，请检查网络连接',
+        description: '信息提取失败,请检查网络连接',
         variant: 'destructive',
       })
     } finally {
@@ -303,7 +303,7 @@ export default function ClassificationPage() {
           
           toast({
             title: '成功',
-            description: `文件上传成功，共 ${result.total_rows} 行数据`,
+            description: `文件上传成功,共 ${result.total_rows} 行数据`,
           })
         } else {
           toast({
@@ -367,13 +367,13 @@ export default function ClassificationPage() {
         
         toast({
           title: '成功',
-          description: `批量提取完成，处理了 ${result.processed_count} 条记录，提取了 ${result.extracted_count} 条结果`,
+          description: `批量提取完成,处理了 ${result.processed_count} 条记录,提取了 ${result.extracted_count} 条结果`,
         })
       } else {
         const errorData = await response.json()
         toast({
           title: '错误',
-          description: errorData.detail || '批量提取失败，请稍后重试',
+          description: errorData.detail || '批量提取失败,请稍后重试',
           variant: 'destructive',
         })
       }
@@ -381,7 +381,7 @@ export default function ClassificationPage() {
       console.error('批量提取失败:', error)
       toast({
         title: '错误',
-        description: '批量提取失败，请检查网络连接',
+        description: '批量提取失败,请检查网络连接',
         variant: 'destructive',
       })
     } finally {
@@ -519,7 +519,7 @@ export default function ClassificationPage() {
                 生成待标签案例
               </CardTitle>
               <CardDescription>
-                系统将自动识别需要标签的案例，并生成待处理列表
+                系统将自动识别需要标签的案例,并生成待处理列表
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -540,7 +540,7 @@ export default function ClassificationPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground text-center">
-                  选择要生成和下载的案例数量。"全部案例"将处理所有可用的待分类案例，<br />
+                  选择要生成和下载的案例数量。"全部案例"将处理所有可用的待分类案例,<br />
                   限制数量选项适用于快速预览或分批处理大量案例。
                 </p>
               </div>
@@ -607,8 +607,8 @@ export default function ClassificationPage() {
                       </div>
                       <div className="text-sm text-green-700">
                         {downloadLimit === 'all' 
-                          ? `共找到 ${stats.uncategorized_cases} 条待分类案例，已生成全部 ${classificationData.length} 条案例用于下载`
-                          : `共找到 ${stats.uncategorized_cases} 条待分类案例，已生成前 ${classificationData.length} 条案例用于下载`
+                          ? `共找到 ${stats.uncategorized_cases} 条待分类案例,已生成全部 ${classificationData.length} 条案例用于下载`
+                          : `共找到 ${stats.uncategorized_cases} 条待分类案例,已生成前 ${classificationData.length} 条案例用于下载`
                         }
                         <br />
                         已分类案例: {stats.categorized_cases} 条
@@ -639,7 +639,7 @@ export default function ClassificationPage() {
                 处罚信息提取
               </CardTitle>
               <CardDescription>
-                输入处罚决定书文本，自动提取关键信息
+                输入处罚决定书文本,自动提取关键信息
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -709,19 +709,26 @@ export default function ClassificationPage() {
                             size="sm"
                             onClick={() => {
                               // Convert table data to CSV and download
-                              const headers = ['被处罚当事人', '罚没总金额', '行业', '监管机关', '违规类型', '主要违法事实', '处罚决定', '决定日期', '行政处罚决定书文号'];
+                              // 使用与批量提取一致的字段顺序
+                              const headers = [
+                                '行政处罚决定书文号', '被处罚当事人', '主要违法违规事实',
+                                '行政处罚依据', '行政处罚决定', '作出处罚决定的机关名称', '作出处罚决定的日期',
+                                '行业', '罚没总金额', '违规类型', '监管地区'
+                              ];
                               const csvData = [
                                 headers.join(','),
                                 ...extractResult.data.map((record: any) => [
+                                  `"${record.行政处罚决定书文号 || ''}"`,
                                   `"${record.被处罚当事人 || ''}"`,
-                                  record.罚没总金额 && record.罚没总金额 !== '0' ? parseInt(record.罚没总金额).toString() : '0',
-                                  `"${record.行业 || ''}"`,
-                                  `"${record.作出处罚决定的机关名称 || ''}"`,
-                                  `"${record.违规类型 || ''}"`,
                                   `"${record.主要违法违规事实 || ''}"`,
+                                  `"${record.行政处罚依据 || ''}"`,
                                   `"${record.行政处罚决定 || ''}"`,
+                                  `"${record.作出处罚决定的机关名称 || ''}"`,
                                   `"${record.作出处罚决定的日期 || ''}"`,
-                                  `"${record.行政处罚决定书文号 || ''}"`
+                                  `"${record.行业 || ''}"`,
+                                  record.罚没总金额 || '',
+                                  `"${record.违规类型 || ''}"`,
+                                  `"${record.监管地区 || ''}"`
                                 ].join(','))
                               ].join('\n');
                               
@@ -926,7 +933,7 @@ export default function ClassificationPage() {
                     点击上传或拖拽文件到此处
                   </div>
                   <div className="text-xs text-muted-foreground mb-4">
-                    支持 CSV 和 Excel 格式文件，最大 10MB
+                    支持 CSV 和 Excel 格式文件,最大 10MB
                   </div>
                   <Input
                     id="file-upload"
@@ -1067,7 +1074,7 @@ export default function ClassificationPage() {
                       提取结果
                     </CardTitle>
                     <CardDescription>
-                      共 {batchResults.length} 条结果，成功 {batchResults.filter(r => r.状态 === '成功').length} 条，失败 {batchResults.filter(r => r.状态 === '失败').length} 条
+                      共 {batchResults.length} 条结果,成功 {batchResults.filter(r => r.状态 === '成功').length} 条,失败 {batchResults.filter(r => r.状态 === '失败').length} 条
                     </CardDescription>
                   </div>
                   <Button onClick={downloadBatchResults} variant="outline">
