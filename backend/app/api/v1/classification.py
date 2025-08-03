@@ -403,6 +403,65 @@ async def save_successful_records(request: SaveSuccessfulRecordsRequest):
         if not successful_records:
             raise HTTPException(status_code=400, detail="没有成功的记录可以保存")
         
+        # 对同一ID的记录进行向前填充处理
+        def fill_forward_by_id(records):
+            """针对同一个ID的记录，对指定字段进行向前填充"""
+            # 需要填充的字段
+            fill_fields = ["行政处罚决定书文号", "主要违法违规事实", "作出处罚决定的日期", "违规类型", "作出处罚决定的机关名称"]
+            
+            # 按ID分组，保持原始顺序
+            id_groups = {}
+            for i, record in enumerate(records):
+                record_id = record.get("原始ID", "")
+                if record_id not in id_groups:
+                    id_groups[record_id] = []
+                # 添加原始索引以保持顺序
+                record['_original_index'] = i
+                id_groups[record_id].append(record)
+            
+            # 对每个ID组进行向前填充
+            for record_id, group_records in id_groups.items():
+                # 按原始索引排序，确保处理顺序正确
+                group_records.sort(key=lambda x: x.get('_original_index', 0))
+                
+                # 为每个字段维护最近的有效值
+                last_valid_values = {field: "" for field in fill_fields}
+                
+                for record in group_records:
+                    # 更新最近的有效值
+                    for field in fill_fields:
+                        current_value = record.get(field, "")
+                        # 检查当前值是否不为空（处理字符串、数字类型和pandas NaN）
+                        is_empty = (current_value is None or 
+                                   str(current_value).strip() == '' or 
+                                   str(current_value).lower() == 'nan')
+                        
+                        # 额外检查pandas NaN
+                        try:
+                            import pandas as pd
+                            if pd.isna(current_value):
+                                is_empty = True
+                        except (ImportError, TypeError):
+                            pass
+                        
+                        if not is_empty:  # 非空且非空白且不是NaN
+                            last_valid_values[field] = current_value
+                        elif last_valid_values[field]:  # 当前为空但有历史有效值
+                            record[field] = last_valid_values[field]
+            
+            # 按原始索引重新排序，保持原始顺序
+            filled_records.sort(key=lambda x: x.get('_original_index', 0))
+            
+            # 移除临时添加的索引字段
+            for record in filled_records:
+                if '_original_index' in record:
+                    del record['_original_index']
+            
+            return filled_records
+        
+        # 执行向前填充处理
+        successful_records = fill_forward_by_id(successful_records)
+        
         # 生成时间戳
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
@@ -1178,6 +1237,65 @@ async def upload_temp_extraction_file(file: UploadFile = File(...)):
         
         if not successful_records:
             raise HTTPException(status_code=400, detail="文件中没有状态为'成功'的记录")
+        
+        # 对同一ID的记录进行向前填充处理
+        def fill_forward_by_id(records):
+            # 按原始ID分组，保持原始顺序
+            id_groups = {}
+            for i, record in enumerate(records):
+                record_id = record.get('原始ID', '')
+                if record_id not in id_groups:
+                    id_groups[record_id] = []
+                # 添加原始索引以保持顺序
+                record['_original_index'] = i
+                id_groups[record_id].append(record)
+            
+            # 对每个ID组进行向前填充
+            filled_records = []
+            for record_id, group_records in id_groups.items():
+                # 按原始索引排序，确保处理顺序正确
+                group_records.sort(key=lambda x: x.get('_original_index', 0))
+                
+                # 需要填充的字段
+                fill_fields = ['行政处罚决定书文号', '主要违法违规事实', '作出处罚决定的日期', '违规类型', '作出处罚决定的机关名称']
+                
+                # 对每个字段进行向前填充
+                for field in fill_fields:
+                    last_value = None
+                    for record in group_records:
+                        current_value = record.get(field, '')
+                        # 检查当前值是否不为空（处理字符串、数字类型和pandas NaN）
+                        is_empty = (current_value is None or 
+                                   str(current_value).strip() == '' or 
+                                   str(current_value).lower() == 'nan')
+                        
+                        # 额外检查pandas NaN
+                        try:
+                            import pandas as pd
+                            if pd.isna(current_value):
+                                is_empty = True
+                        except (ImportError, TypeError):
+                            pass
+                        
+                        if not is_empty:  # 如果当前值不为空
+                            last_value = current_value
+                        elif last_value:  # 如果当前值为空但有上一个非空值
+                            record[field] = last_value
+                
+                filled_records.extend(group_records)
+            
+            # 按原始索引重新排序，保持原始顺序
+            records.sort(key=lambda x: x.get('_original_index', 0))
+            
+            # 移除临时添加的索引字段
+            for record in records:
+                if '_original_index' in record:
+                    del record['_original_index']
+            
+            return records
+        
+        # 应用向前填充处理
+        successful_records = fill_forward_by_id(successful_records)
         
         # 生成时间戳
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
