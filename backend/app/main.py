@@ -4,6 +4,16 @@ from contextlib import asynccontextmanager
 from app.api.v1 import cases, search, analytics, admin, classification
 from app.core.config import settings
 from app.core.database import db_manager
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()  # This will output to console
+    ]
+)
 
 
 @asynccontextmanager

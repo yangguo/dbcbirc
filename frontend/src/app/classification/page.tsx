@@ -72,9 +72,17 @@ export default function ClassificationPage() {
   const [extractResult, setExtractResult] = useState<any>(null)
   const [displayMode, setDisplayMode] = useState<'json' | 'table'>('json')
   const [downloadLimit, setDownloadLimit] = useState<string>('all') // 'all', 'custom', or specific numbers
-  const [batchResults, setBatchResults] = useState<any[]>([])
-  const [processingLogs, setProcessingLogs] = useState<string[]>([])
+  const [batchResults, setBatchResults] = useState<any[]>([])  
+  const [processingLogs, setProcessingLogs] = useState<string[]>([])  
   const [showResults, setShowResults] = useState(false)
+  const [realTimeProgress, setRealTimeProgress] = useState<{
+    current: number;
+    total: number;
+    percentage: number;
+    currentRecordId?: string;
+    isProcessing: boolean;
+  }>({ current: 0, total: 0, percentage: 0, isProcessing: false })
+  const [realTimeLogs, setRealTimeLogs] = useState<string[]>([])
 
   // 获取分类统计数据
   useEffect(() => {
@@ -368,7 +376,142 @@ export default function ClassificationPage() {
     }
   }
 
-  // 批量处罚信息提取
+  // 批量处罚信息提取 - 实时版本
+  const handleBatchExtractRealTime = async () => {
+    if (!uploadedFile) {
+      toast({
+        title: '错误',
+        description: '请先上传文件',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    if (!selectedIdColumn || !selectedContentColumn) {
+      toast({
+        title: '错误',
+        description: '请选择ID字段和内容字段',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setProcessing(true)
+    setBatchResults([])
+    setProcessingLogs([])
+    setRealTimeLogs([])
+    setShowResults(false)
+    setRealTimeProgress({ current: 0, total: 0, percentage: 0, isProcessing: true })
+    
+    const formData = new FormData()
+    formData.append('file', uploadedFile)
+    formData.append('id_column', selectedIdColumn)
+    formData.append('content_column', selectedContentColumn)
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/classification/batch-extract-penalty-info-stream', {
+        method: 'POST',
+        body: formData
+      })
+
+      if (!response.ok) {
+        throw new Error('网络请求失败')
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      
+      if (!reader) {
+        throw new Error('无法读取响应流')
+      }
+
+      let buffer = ''
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) break
+        
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              
+              // 处理不同类型的消息
+              switch (data.type) {
+                case 'start':
+                  setRealTimeLogs(prev => [...prev, data.message, data.file_info, data.task_info])
+                  setRealTimeProgress(prev => ({ ...prev, total: data.total_records }))
+                  break
+                  
+                case 'progress':
+                  setRealTimeProgress({
+                    current: data.current,
+                    total: data.total,
+                    percentage: data.percentage,
+                    currentRecordId: data.record_id,
+                    isProcessing: true
+                  })
+                  setRealTimeLogs(prev => [...prev, data.message])
+                  break
+                  
+                case 'success':
+                case 'failure':
+                  setRealTimeLogs(prev => [...prev, data.message])
+                  break
+                  
+                case 'temp_save':
+                case 'temp_save_error':
+                  setRealTimeLogs(prev => [...prev, data.message])
+                  break
+                  
+                case 'complete':
+                  setBatchResults(data.results || [])
+                  setProcessingLogs(prev => [...prev, ...realTimeLogs])
+                  setShowResults(true)
+                  setRealTimeProgress(prev => ({ ...prev, isProcessing: false }))
+                  
+                  const successMsg = [
+                    `处理完成: ${data.processed_count || 0} 条记录`,
+                    `成功提取: ${data.extracted_count || 0} 条结果`,
+                    `成功率: ${data.success_rate || 0}%`,
+                    `处理时间: ${data.processing_time_minutes || 0} 分钟`,
+                    `提取到 ${data.total_penalty_records || 0} 条处罚信息`
+                  ].join(' | ')
+                  
+                  toast({
+                    title: '批量提取完成',
+                    description: successMsg,
+                  })
+                  break
+                  
+                case 'error':
+                  throw new Error(data.message)
+              }
+            } catch (parseError) {
+              console.error('解析服务器响应失败:', parseError)
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('批量提取失败:', error)
+      setRealTimeProgress(prev => ({ ...prev, isProcessing: false }))
+      toast({
+        title: '错误',
+        description: error instanceof Error ? error.message : '批量提取失败,请检查网络连接',
+        variant: 'destructive',
+      })
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  // 批量处罚信息提取 - 原版本（保留作为备用）
   const handleBatchExtract = async () => {
     if (!uploadedFile) {
       toast({
@@ -410,9 +553,18 @@ export default function ClassificationPage() {
         setProcessingLogs(result.processing_logs || [])
         setShowResults(true)
         
+        // 构建详细的成功消息
+        const successMsg = [
+          `处理完成: ${result.processed_count || 0} 条记录`,
+          `成功提取: ${result.extracted_count || 0} 条结果`,
+          `成功率: ${result.success_rate || 0}%`,
+          `处理时间: ${result.processing_time_minutes || 0} 分钟`,
+          `提取到 ${result.total_penalty_records || 0} 条处罚信息`
+        ].join(' | ')
+        
         toast({
-          title: '成功',
-          description: `批量提取完成,处理了 ${result.processed_count} 条记录,提取了 ${result.extracted_count} 条结果`,
+          title: '批量提取完成',
+          description: successMsg,
         })
       } else {
         const errorData = await response.json()
@@ -1089,24 +1241,120 @@ export default function ClassificationPage() {
               )}
 
               <Button 
-                onClick={handleBatchExtract}
-                disabled={processing || !uploadedFile || !selectedIdColumn || !selectedContentColumn}
-                className="w-full"
-              >
-                {processing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    处理中...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    批量提取
-                  </>
-                )}
-              </Button>
+                  onClick={handleBatchExtractRealTime}
+                  disabled={processing || !uploadedFile || !selectedIdColumn || !selectedContentColumn}
+                  className="w-full"
+                >
+                  {processing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      处理中...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-4 w-4" />
+                      批量提取
+                    </>
+                  )}
+                </Button>
             </CardContent>
           </Card>
+
+          {/* 实时进度显示区域 */}
+          {realTimeProgress.isProcessing && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  实时处理进度
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* 进度条 */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>处理进度: {realTimeProgress.current}/{realTimeProgress.total}</span>
+                      <span>{realTimeProgress.percentage.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${realTimeProgress.percentage}%` }}
+                      ></div>
+                    </div>
+                    {realTimeProgress.currentRecordId && (
+                      <div className="text-sm text-gray-600">
+                        当前处理记录ID: {realTimeProgress.currentRecordId}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 实时日志 */}
+                  <div className="space-y-2">
+                    <h4 className="font-medium">实时日志</h4>
+                    <div className="bg-gray-50 rounded-lg p-3 max-h-60 overflow-y-auto">
+                      {realTimeLogs.map((log, index) => (
+                        <div 
+                          key={index} 
+                          className={`text-sm mb-1 ${
+                            log && log.includes('✓') ? 'text-green-600' : 
+                            log && (log.includes('✗') || log.includes('失败')) ? 'text-red-600' : 
+                            log && log.includes('💾') ? 'text-blue-600' : 
+                            'text-gray-700'
+                          }`}
+                        >
+                          {log}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 处理统计概览 */}
+          {showResults && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  处理统计概览
+                </CardTitle>
+                <CardDescription>
+                  批量处理任务的详细统计信息
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg border">
+                    <div className="text-2xl font-bold text-blue-600">{batchResults.length}</div>
+                    <div className="text-sm text-blue-600/70">总记录数</div>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg border">
+                    <div className="text-2xl font-bold text-green-600">
+                      {batchResults.filter(r => r.状态 === '成功').length}
+                    </div>
+                    <div className="text-sm text-green-600/70">成功提取</div>
+                  </div>
+                  <div className="bg-red-50 p-4 rounded-lg border">
+                    <div className="text-2xl font-bold text-red-600">
+                      {batchResults.filter(r => r.状态 === '失败').length}
+                    </div>
+                    <div className="text-sm text-red-600/70">提取失败</div>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg border">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {batchResults.length > 0 ? 
+                        Math.round((batchResults.filter(r => r.状态 === '成功').length / batchResults.length) * 100) : 0}%
+                    </div>
+                    <div className="text-sm text-purple-600/70">成功率</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* 批量提取结果 */}
           {showResults && batchResults.length > 0 && (
@@ -1241,17 +1489,41 @@ export default function ClassificationPage() {
                   处理日志
                 </CardTitle>
                 <CardDescription>
-                  详细的处理过程记录
+                  详细的处理过程记录和统计信息
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="bg-muted rounded-lg p-4 max-h-64 overflow-auto">
-                  <div className="space-y-1 text-sm font-mono">
-                    {processingLogs.map((log, index) => (
-                      <div key={index} className="text-muted-foreground">
-                        {log}
-                      </div>
-                    ))}
+                <div className="bg-muted rounded-lg p-4 max-h-80 overflow-auto">
+                  <div className="space-y-2 text-sm">
+                    {processingLogs.map((log, index) => {
+                      // 根据日志内容类型设置不同的样式
+                      let logStyle = "text-muted-foreground font-mono";
+                      let icon = null;
+                      
+                      if (log && (log.includes('开始处理') || log.includes('文件信息'))) {
+                        logStyle = "text-blue-600 font-medium";
+                        icon = <CheckCircle className="h-4 w-4 text-blue-500" />;
+                      } else if (log && (log.includes('处理进度') || log.includes('剩余时间'))) {
+                        logStyle = "text-green-600 font-mono";
+                        icon = <Loader2 className="h-4 w-4 text-green-500" />;
+                      } else if (log && (log.includes('统计') || log.includes('成功率') || log.includes('时间统计'))) {
+                        logStyle = "text-purple-600 font-medium";
+                        icon = <BarChart3 className="h-4 w-4 text-purple-500" />;
+                      } else if (log && (log.includes('输出结果') || log.includes('完成'))) {
+                        logStyle = "text-emerald-600 font-medium";
+                        icon = <CheckCircle className="h-4 w-4 text-emerald-500" />;
+                      } else if (log && (log.includes('错误') || log.includes('失败'))) {
+                        logStyle = "text-red-600 font-medium";
+                        icon = <AlertCircle className="h-4 w-4 text-red-500" />;
+                      }
+                      
+                      return (
+                        <div key={index} className={`flex items-start gap-2 ${logStyle}`}>
+                          {icon}
+                          <span className="flex-1">{log}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </CardContent>
