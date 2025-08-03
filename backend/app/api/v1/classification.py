@@ -172,7 +172,21 @@ def extract_penalty_info(text):
         # Add retry logic with exponential backoff
         import time
         max_retries = 3
-        base_delay = 1
+        base_delay = 2
+        
+        # 根据文本长度动态调整超时时间
+        text_length = len(text)
+        if text_length > 5000:
+            timeout_seconds = 360.0  # 6分钟用于超长文本
+            max_tokens = 10000
+        elif text_length > 2000:
+            timeout_seconds = 300.0  # 5分钟用于长文本
+            max_tokens = 10000
+        else:
+            timeout_seconds = 180.0  # 3分钟用于普通文本
+            max_tokens = 10000
+        
+        print(f"处理文本长度: {text_length}字符, 设置超时: {timeout_seconds}秒, 最大tokens: {max_tokens}")
         
         for attempt in range(max_retries):
             try:
@@ -183,8 +197,8 @@ def extract_penalty_info(text):
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.1,
-                    max_tokens=2000,
-                    timeout=240.0  # Per-request timeout (4 minutes)
+                    max_tokens=max_tokens,
+                    timeout=timeout_seconds
                 )
                 break  # Success, exit retry loop
             except (openai.APITimeoutError, openai.APIConnectionError) as e:
@@ -448,6 +462,11 @@ async def save_successful_records(request: SaveSuccessfulRecordsRequest):
                             last_valid_values[field] = current_value
                         elif last_valid_values[field]:  # 当前为空但有历史有效值
                             record[field] = last_valid_values[field]
+            
+            # 收集所有处理后的记录
+            filled_records = []
+            for record_id, group_records in id_groups.items():
+                filled_records.extend(group_records)
             
             # 按原始索引重新排序，保持原始顺序
             filled_records.sort(key=lambda x: x.get('_original_index', 0))
@@ -1285,14 +1304,14 @@ async def upload_temp_extraction_file(file: UploadFile = File(...)):
                 filled_records.extend(group_records)
             
             # 按原始索引重新排序，保持原始顺序
-            records.sort(key=lambda x: x.get('_original_index', 0))
+            filled_records.sort(key=lambda x: x.get('_original_index', 0))
             
             # 移除临时添加的索引字段
-            for record in records:
+            for record in filled_records:
                 if '_original_index' in record:
                     del record['_original_index']
             
-            return records
+            return filled_records
         
         # 应用向前填充处理
         successful_records = fill_forward_by_id(successful_records)
