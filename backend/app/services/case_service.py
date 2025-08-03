@@ -112,8 +112,8 @@ class CaseService:
             # Apply search filters
             filtered_df = self._apply_search_filters(merged_df, search_request)
             
-            # Pagination
-            total = len(filtered_df)
+            # Pagination - use unique IDs only
+            total = filtered_df["id"].nunique() if "id" in filtered_df.columns else len(filtered_df)
             total_pages = (total + search_request.page_size - 1) // search_request.page_size
             start_idx = (search_request.page - 1) * search_request.page_size
             end_idx = start_idx + search_request.page_size
@@ -223,8 +223,8 @@ class CaseService:
             else:
                 merged_df = detail_df.copy()
             
-            # Calculate stats
-            total_cases = len(merged_df)
+            # Calculate stats - use unique IDs only
+            total_cases = merged_df["id"].nunique() if "id" in merged_df.columns else len(merged_df)
             
             # Amount statistics
             amount_col = merged_df.get("amount", pd.Series(dtype=float))

@@ -305,6 +305,10 @@ class ApiClient {
     return this.request('/api/v1/categories/stats')
   }
 
+  async getClassificationStats() {
+    return this.request('/api/v1/admin/classification-stats')
+  }
+
   async autoClassifyCases(caseIds?: string[]) {
     return this.request('/api/v1/categories/auto-classify', {
       method: 'POST',

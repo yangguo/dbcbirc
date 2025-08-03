@@ -15,7 +15,7 @@ import asyncio
 client = openai.OpenAI(
     api_key=settings.OPENAI_API_KEY,
     base_url=settings.OPENAI_BASE_URL,
-    timeout=120.0,  # Increased timeout to 2 minutes
+    timeout=300.0,  # Increased timeout to 5 minutes
     max_retries=5   # Increased retries
 )
 
@@ -43,7 +43,8 @@ def get_class(article, candidate_labels, multi_label=False):
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1,
-            max_tokens=150
+            max_tokens=150,
+            timeout=240.0  # Per-request timeout (4 minutes)
         )
         
         # 解析响应
@@ -117,90 +118,17 @@ class ExtractInfoResult(BaseModel):
     error: Optional[str] = None
 
 
-def extract_penalty_info_fallback(text):
-    """基本的文本解析作为LLM失败时的fallback"""
-    try:
-        import re
-        
-        # 尝试从文本中提取基本信息
-        results = []
-        
-        # 简单的正则表达式匹配
-        # 查找公司名称模式
-        company_pattern = r'([^0-9\s]+(?:保险|银行|信托|证券|基金|金融)(?:股份有限公司|有限公司|公司))'
-        companies = re.findall(company_pattern, text)
-        
-        # 查找金额模式
-        amount_pattern = r'(\d+(?:\.\d+)?万元)'
-        amounts = re.findall(amount_pattern, text)
-        
-        # 查找监管机关
-        regulator_pattern = r'(金融监管总局|银保监[局会]|人民银行)'
-        regulators = re.findall(regulator_pattern, text)
-        
-        # 如果找到了公司，为每个公司创建一个记录
-        if companies:
-            for i, company in enumerate(companies):
-                amount_str = "0"
-                if i < len(amounts):
-                    # 转换金额格式
-                    amount_text = amounts[i]
-                    if '万元' in amount_text:
-                        amount_num = float(amount_text.replace('万元', ''))
-                        amount_str = str(int(amount_num * 10000))
-                
-                regulator = regulators[0] if regulators else "金融监管总局"
-                
-                results.append({
-                    "行政处罚决定书文号": "",
-                    "被处罚当事人": company,
-                    "主要违法违规事实": "基本解析模式，详细信息需要LLM处理",
-                    "行政处罚依据": "《保险法》等相关规定",
-                    "行政处罚决定": "详细处罚内容需要LLM处理",
-                    "作出处罚决定的机关名称": regulator,
-                    "作出处罚决定的日期": "",
-                    "行业": "保险业" if "保险" in company else "金融业",
-                    "罚没总金额": amount_str,
-                    "违规类型": "需要LLM分析",
-                    "监管地区": ""
-                })
-        
-        if not results:
-            # 如果没有找到任何信息，返回一个基本结构
-            results = [{
-                "行政处罚决定书文号": "",
-                "被处罚当事人": "解析失败",
-                "主要违法违规事实": "基本解析模式无法提取详细信息",
-                "行政处罚依据": "",
-                "行政处罚决定": "",
-                "作出处罚决定的机关名称": "",
-                "作出处罚决定的日期": "",
-                "行业": "",
-                "罚没总金额": "0",
-                "违规类型": "",
-                "监管地区": ""
-            }]
-        
-        return {
-            "success": True,
-            "data": results,
-            "fallback_mode": True
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"基本解析也失败: {str(e)}"
-        }
-
 
 def extract_penalty_info(text):
     """使用LLM提取行政处罚决定书关键信息"""
     try:
         # 检查API密钥是否配置
         if not settings.OPENAI_API_KEY:
-            print("API密钥未配置，使用fallback模式")
-            return extract_penalty_info_fallback(text)
+            print("API密钥未配置")
+            return {
+                "success": False,
+                "error": "API密钥未配置，无法使用LLM服务"
+            }
         
         # 检查输入文本是否为空
         if not text or not text.strip():
@@ -256,7 +184,7 @@ def extract_penalty_info(text):
                     ],
                     temperature=0.1,
                     max_tokens=2000,
-                    timeout=90.0  # Per-request timeout
+                    timeout=240.0  # Per-request timeout (4 minutes)
                 )
                 break  # Success, exit retry loop
             except (openai.APITimeoutError, openai.APIConnectionError) as e:
@@ -340,41 +268,27 @@ def extract_penalty_info(text):
             except json.JSONDecodeError:
                 pass
             
-            # 如果所有JSON解析都失败，返回一个基本的结果结构
+            # 如果所有JSON解析都失败，返回失败状态
             print(f"JSON解析完全失败，原始响应: {result_text[:200]}...")
-            
-            # 尝试从文本中提取基本信息作为fallback
-            fallback_result = [{
-                "行政处罚决定书文号": "",
-                "被处罚当事人": "解析失败",
-                "主要违法违规事实": "LLM响应格式错误，无法解析",
-                "行政处罚依据": "",
-                "行政处罚决定": "",
-                "作出处罚决定的机关名称": "",
-                "作出处罚决定的日期": "",
-                "行业": "",
-                "罚没总金额": "0",
-                "违规类型": "",
-                "监管地区": ""
-            }]
             
             return {
                 "success": False,
                 "error": "无法解析LLM返回的JSON格式",
-                "data": fallback_result,
                 "raw_response": result_text[:500] + "..." if len(result_text) > 500 else result_text
             }
             
     except openai.APIConnectionError as e:
-        print(f"API连接失败详情: {str(e)}, 使用fallback模式")
-        fallback_result = extract_penalty_info_fallback(text)
-        fallback_result["error"] = f"API连接失败，使用基本解析模式: {str(e)}"
-        return fallback_result
+        print(f"API连接失败详情: {str(e)}")
+        return {
+            "success": False,
+            "error": f"API连接失败: {str(e)}"
+        }
     except openai.APITimeoutError as e:
-        print(f"API请求超时详情: {str(e)}, 使用fallback模式")
-        fallback_result = extract_penalty_info_fallback(text)
-        fallback_result["error"] = f"API请求超时，使用基本解析模式: {str(e)}"
-        return fallback_result
+        print(f"API请求超时详情: {str(e)}")
+        return {
+            "success": False,
+            "error": f"API请求超时: {str(e)}"
+        }
     except openai.RateLimitError as e:
         print(f"API限流详情: {str(e)}")
         return {
@@ -1227,3 +1141,110 @@ async def batch_classify(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload-temp-extraction-file")
+async def upload_temp_extraction_file(file: UploadFile = File(...)):
+    """上传批量处罚信息提取的临时保存文件，解析后保存为cbirccat和cbircsplit格式"""
+    try:
+        # 验证文件类型
+        if not (file.filename.endswith('.csv') or file.filename.endswith('.xlsx') or file.filename.endswith('.xls')):
+            raise HTTPException(status_code=400, detail="只支持CSV和Excel文件")
+        
+        # 读取文件
+        contents = await file.read()
+        
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+        
+        # 验证必要的列是否存在
+        required_columns = [
+            '原始ID', '状态', '行政处罚决定书文号', '被处罚当事人', '主要违法违规事实',
+            '行政处罚依据', '行政处罚决定', '作出处罚决定的机关名称', '作出处罚决定的日期',
+            '行业', '罚没总金额', '违规类型', '监管地区'
+        ]
+        
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"文件缺少必要的列: {', '.join(missing_columns)}"
+            )
+        
+        # 过滤出成功的记录
+        successful_records = df[df['状态'] == '成功'].to_dict('records')
+        
+        if not successful_records:
+            raise HTTPException(status_code=400, detail="文件中没有状态为'成功'的记录")
+        
+        # 生成时间戳
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # 获取项目根目录下的cbirc文件夹路径
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+        cbirc_dir = os.path.join(project_root, "cbirc")
+        
+        # 确保cbirc目录存在
+        os.makedirs(cbirc_dir, exist_ok=True)
+        
+        # 准备第一个文件的数据 (cbircsplit)
+        split_data = []
+        for record in successful_records:
+            split_record = {
+                "wenhao": record.get("行政处罚决定书文号", ""),
+                "people": record.get("被处罚当事人", ""),
+                "event": record.get("主要违法违规事实", ""),
+                "law": record.get("行政处罚依据", ""),
+                "penalty": record.get("行政处罚决定", ""),
+                "org": record.get("作出处罚决定的机关名称", ""),
+                "date": record.get("作出处罚决定的日期", ""),
+                "id": record.get("原始ID", "")
+            }
+            split_data.append(split_record)
+        
+        # 准备第二个文件的数据 (cbirccat)
+        cat_data = []
+        for record in successful_records:
+            cat_record = {
+                "id": record.get("原始ID", ""),
+                "amount": record.get("罚没总金额", ""),
+                "industry": record.get("行业", ""),
+                "category": record.get("违规类型", ""),
+                "province": record.get("监管地区", "")
+            }
+            cat_data.append(cat_record)
+        
+        # 保存第一个文件
+        split_filename = f"cbircsplit{timestamp}.csv"
+        split_filepath = os.path.join(cbirc_dir, split_filename)
+        split_df = pd.DataFrame(split_data)
+        split_df.to_csv(split_filepath, index=False, encoding='utf-8-sig')
+        
+        # 保存第二个文件
+        cat_filename = f"cbirccat{timestamp}.csv"
+        cat_filepath = os.path.join(cbirc_dir, cat_filename)
+        cat_df = pd.DataFrame(cat_data)
+        cat_df.to_csv(cat_filepath, index=False, encoding='utf-8-sig')
+        
+        return {
+            "message": "临时文件上传并处理成功",
+            "total_records": len(df),
+            "successful_records": len(successful_records),
+            "files_created": [
+                {
+                    "filename": split_filename,
+                    "filepath": split_filepath,
+                    "records": len(split_data)
+                },
+                {
+                    "filename": cat_filename,
+                    "filepath": cat_filepath,
+                    "records": len(cat_data)
+                }
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"处理文件失败: {str(e)}")

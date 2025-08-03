@@ -465,8 +465,8 @@ async def get_case_summary_by_org(org_name: str):
                 "summary": "暂无数据"
             }
         
-        # Calculate statistics
-        total_cases = len(sumdf)
+        # Calculate statistics - use unique IDs only
+        total_cases = sumdf["id"].nunique() if "id" in sumdf.columns else len(sumdf)
         
         if "发布日期" in sumdf.columns:
             min_date = sumdf["发布日期"].min()
@@ -512,8 +512,8 @@ async def get_case_detail_summary_by_org(org_name: str):
                 "summary": "暂无详情数据"
             }
         
-        # Calculate statistics
-        total_cases = len(dtldf)
+        # Calculate statistics - use unique IDs only
+        total_cases = dtldf["id"].nunique() if "id" in dtldf.columns else len(dtldf)
         
         if "发布日期" in dtldf.columns:
             min_date = dtldf["发布日期"].min()
@@ -633,15 +633,16 @@ async def get_classification_stats():
         # Get categorized data
         amtdf = get_cbirccat()
         
-        # Calculate basic statistics
-        total_cases = len(newdf)
+        # Calculate basic statistics - use unique IDs only
+        total_cases = newdf["id"].nunique() if "id" in newdf.columns else len(newdf)
         
         if amtdf.empty:
             categorized_cases = 0
             categorized_ids = []
         else:
             categorized_ids = amtdf["id"].tolist() if "id" in amtdf.columns else []
-            categorized_cases = len(categorized_ids)
+            # Count unique categorized IDs only
+            categorized_cases = amtdf["id"].nunique() if "id" in amtdf.columns else 0
         
         uncategorized_cases = total_cases - categorized_cases
         
@@ -718,15 +719,16 @@ async def generate_classification_data(limit: Optional[int] = Query(None, descri
         # Get categorized data
         amtdf = get_cbirccat()
         
-        # Calculate statistics
-        total_cases = len(newdf)
+        # Calculate statistics - use unique IDs only
+        total_cases = newdf["id"].nunique() if "id" in newdf.columns else len(newdf)
         
         if amtdf.empty:
             categorized_cases = 0
             categorized_ids = []
         else:
             categorized_ids = amtdf["id"].tolist() if "id" in amtdf.columns else []
-            categorized_cases = len(categorized_ids)
+            # Count unique categorized IDs only
+            categorized_cases = amtdf["id"].nunique() if "id" in amtdf.columns else 0
         
         uncategorized_cases = total_cases - categorized_cases
         

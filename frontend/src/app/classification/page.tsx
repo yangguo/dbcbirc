@@ -24,6 +24,7 @@ import {
   Code
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
+import { apiClient } from '@/lib/api'
 import {
   Table,
   TableBody,
@@ -83,6 +84,8 @@ export default function ClassificationPage() {
     isProcessing: boolean;
   }>({ current: 0, total: 0, percentage: 0, isProcessing: false })
   const [realTimeLogs, setRealTimeLogs] = useState<string[]>([])
+  const [tempFile, setTempFile] = useState<File | null>(null)
+  const [tempFileProcessing, setTempFileProcessing] = useState(false)
 
   // 获取分类统计数据
   useEffect(() => {
@@ -91,11 +94,8 @@ export default function ClassificationPage() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/admin/classification-stats')
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data)
-      }
+      const data = await apiClient.getClassificationStats() as ClassificationStats
+      setStats(data)
     } catch (error) {
       console.error('获取统计数据失败:', error)
     }
@@ -249,6 +249,86 @@ export default function ClassificationPage() {
         description: `保存失败: ${error.message}`,
         variant: 'destructive',
       })
+    }
+  }
+
+  // 处理临时文件上传
+  const handleTempFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: '错误',
+          description: '文件大小不能超过 10MB',
+          variant: 'destructive',
+        })
+        return
+      }
+      if (!file.name.endsWith('.csv') && !file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+        toast({
+          title: '错误',
+          description: '请上传 CSV 或 Excel 格式文件',
+          variant: 'destructive',
+        })
+        return
+      }
+      setTempFile(file)
+      toast({
+        title: '成功',
+        description: `文件 ${file.name} 已选择`,
+      })
+    }
+  }
+
+  // 上传并处理临时文件
+  const handleUploadTempFile = async () => {
+    if (!tempFile) {
+      toast({
+        title: '错误',
+        description: '请先选择文件',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setTempFileProcessing(true)
+    
+    const formData = new FormData()
+    formData.append('file', tempFile)
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/classification/upload-temp-extraction-file', {
+        method: 'POST',
+        body: formData
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || '上传失败')
+      }
+      
+      const result = await response.json()
+      toast({
+        title: '上传成功',
+        description: `成功处理 ${result.successful_records} 条记录，已保存为:\n${result.files_created.map(file => file.filename).join('\n')}`,
+      })
+      
+      // 清空文件选择
+      setTempFile(null)
+      const fileInput = document.getElementById('temp-file-upload') as HTMLInputElement
+      if (fileInput) {
+        fileInput.value = ''
+      }
+      
+    } catch (error) {
+      console.error('上传失败:', error)
+      toast({
+        title: '错误',
+        description: `上传失败: ${error.message}`,
+        variant: 'destructive',
+      })
+    } finally {
+      setTempFileProcessing(false)
     }
   }
 
@@ -692,7 +772,7 @@ export default function ClassificationPage() {
 
       {/* Main Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="generate" className="flex items-center gap-2">
             <Tag className="h-4 w-4" />
             生成待标签案例
@@ -704,6 +784,10 @@ export default function ClassificationPage() {
           <TabsTrigger value="batch" className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
             批量提取
+          </TabsTrigger>
+          <TabsTrigger value="upload-temp" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            上传临时文件
           </TabsTrigger>
         </TabsList>
 
@@ -1529,6 +1613,95 @@ export default function ClassificationPage() {
               </CardContent>
             </Card>
           )}
+        </TabsContent>
+
+        {/* 上传临时文件标签页 */}
+        <TabsContent value="upload-temp" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                上传临时保存文件
+              </CardTitle>
+              <CardDescription>
+                上传批量处罚信息提取的临时保存文件，系统将解析并保存为标准格式的 cbircsplit 和 cbirccat 文件
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-600">
+                      支持 CSV 和 Excel 格式文件，最大 10MB
+                    </p>
+                    <div className="flex items-center justify-center">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => document.getElementById('temp-file-upload')?.click()}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        选择文件
+                      </Button>
+                      <Input
+                        id="temp-file-upload"
+                        type="file"
+                        accept=".csv,.xlsx,.xls"
+                        onChange={handleTempFileUpload}
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {tempFile && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-blue-600" />
+                        <span className="text-sm font-medium text-blue-900">
+                          已选择文件: {tempFile.name}
+                        </span>
+                      </div>
+                      <Badge variant="secondary">
+                        {(tempFile.size / 1024 / 1024).toFixed(2)} MB
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleUploadTempFile}
+                    disabled={!tempFile || tempFileProcessing}
+                    className="flex-1"
+                  >
+                    {tempFileProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        处理中...
+                      </>
+                    ) : (
+                      <>
+                        <Cpu className="h-4 w-4 mr-2" />
+                        处理文件
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">处理功能说明：</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• 文件必须包含以下列：原始ID、状态、行政处罚决定书文号、被处罚当事人、主要违法违规事实等</li>
+                    <li>• 系统将自动过滤状态为"成功"的记录</li>
+                    <li>• 处理后的文件将保存到项目根目录下的 cbirc 文件夹中</li>
+                    <li>• 生成的文件名格式：cbircsplit_YYYYMMDD_HHMMSS.csv 和 cbirccat_YYYYMMDD_HHMMSS.csv</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
