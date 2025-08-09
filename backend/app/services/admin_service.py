@@ -129,6 +129,29 @@ class AdminService:
         }
         return org_mapping.get(org_name, "")
 
+async def get_cases_by_date_range(file_type: str, start_date: str, end_date: str):
+    """Get cases by date range"""
+    from app.api.v1.admin import get_cbircsum, get_cbircdetail, get_cbirccat
+    import pandas as pd
+
+    if file_type == "cbircsum":
+        df = get_cbircsum("")
+    elif file_type == "cbircdtl":
+        df = get_cbircdetail("")
+    elif file_type == "cbirccat":
+        df = get_cbirccat()
+    else:
+        return pd.DataFrame()
+
+    if df.empty or "发布日期" not in df.columns:
+        return pd.DataFrame()
+
+    df["发布日期"] = pd.to_datetime(df["发布日期"])
+    start_date = pd.to_datetime(start_date)
+    end_date = pd.to_datetime(end_date)
+
+    return df[(df["发布日期"] >= start_date) & (df["发布日期"] <= end_date)]
+
 
 # Create a global instance of AdminService
 # Note: Database will be set when the application starts

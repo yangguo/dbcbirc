@@ -29,9 +29,9 @@
   .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
+    --card: 240 10% 6%;
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
+    --popover: 240 10% 6%;
     --popover-foreground: 0 0% 98%;
     --primary: 262 83% 58%;
     --primary-foreground: 210 40% 98%;
@@ -39,12 +39,12 @@
     --secondary-foreground: 0 0% 98%;
     --muted: 240 3.7% 15.9%;
     --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
+    --accent: 240 3.7% 18%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
+    --border: 240 3.7% 18%;
+    --input: 240 3.7% 18%;
     --ring: 262 83% 58%;
   }
 
@@ -153,5 +153,180 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+  
+  /* Enhanced Calendar Styling */
+  .rdp {
+    --rdp-cell-size: 40px;
+    --rdp-accent-color: hsl(262 83% 58%);
+    --rdp-background-color: hsl(0 0% 100%);
+    --rdp-accent-color-dark: hsl(262 83% 48%);
+  }
+  
+  /* Calendar animations and transitions */
+  .rdp-day {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .rdp-day::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: radial-gradient(circle, rgba(262, 83%, 58%, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: -1;
+  }
+  
+  .rdp-day:hover::before {
+    width: 100%;
+    height: 100%;
+  }
+  
+  /* Calendar dropdown enhancements */
+  .rdp select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23374151' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1.25em 1.25em;
+    padding-right: 2.75rem;
+  }
+  
+  .rdp select:focus {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+  
+  .rdp-dropdown {
+    @apply transition-all duration-300 ease-in-out;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rdp-dropdown:hover {
+    @apply transform scale-105;
+  }
+
+  .rdp-dropdown:focus {
+    @apply ring-2 ring-primary/30 ring-offset-2;
+  }
+
+  /* Responsive dropdown sizing */
+  @media (max-width: 640px) {
+    .rdp-dropdown {
+      max-width: 90px;
+      min-width: 70px;
+      font-size: 0.875rem;
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+    
+    .rdp-caption_dropdowns {
+      gap: 0.5rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .rdp-dropdown {
+      max-width: 80px;
+      min-width: 65px;
+      font-size: 0.8rem;
+    }
+  }
+  
+  /* Dark mode calendar improvements */
+  .dark .rdp {
+    --rdp-cell-size: 40px;
+    --rdp-accent-color: hsl(262 83% 58%);
+    --rdp-background-color: hsl(240 10% 6%);
+    --rdp-accent-color-dark: hsl(262 83% 48%);
+  }
+  
+  .dark .rdp-day_selected {
+    background: linear-gradient(135deg, hsl(262 83% 58%) 0%, hsl(262 83% 48%) 100%) !important;
+    color: hsl(210 40% 98%) !important;
+    box-shadow: 0 4px 12px rgba(262, 83%, 58%, 0.3);
+  }
+  
+  .dark .rdp-day_selected:hover {
+    background: linear-gradient(135deg, hsl(262 83% 48%) 0%, hsl(262 83% 38%) 100%) !important;
+    box-shadow: 0 6px 16px rgba(262, 83%, 58%, 0.4);
+    transform: scale(1.05);
+  }
+  
+  .dark .rdp-day_today {
+    background: linear-gradient(135deg, hsl(240 3.7% 18%) 0%, hsl(240 3.7% 22%) 100%);
+    color: hsl(0 0% 98%);
+    font-weight: 700;
+    box-shadow: 0 0 0 2px hsl(240 3.7% 30%);
+  }
+  
+  .dark .rdp-day:hover {
+    background: linear-gradient(135deg, hsl(240 3.7% 18%) 0%, hsl(240 3.7% 22%) 100%);
+    color: hsl(0 0% 98%);
+    transform: scale(1.05);
+  }
+  
+  .dark .rdp-day::before {
+    background: radial-gradient(circle, rgba(262, 83%, 58%, 0.15) 0%, transparent 70%);
+  }
+  
+  /* Enhanced select styling for dark mode */
+  .dark .rdp select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1.25em 1.25em;
+    padding-right: 2.75rem;
+  }
+  
+  .dark .rdp select option {
+    background-color: hsl(240 10% 6%);
+    color: hsl(0 0% 98%);
+  }
+  
+  /* Date picker trigger enhancements */
+  .date-picker-trigger {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .date-picker-trigger::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+  }
+  
+  .date-picker-trigger:hover::after {
+    left: 100%;
+  }
+  
+  /* Smooth calendar popup animation */
+  @keyframes calendar-popup {
+    0% {
+      opacity: 0;
+      transform: scale(0.95) translateY(-10px);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+  
+  .calendar-popup {
+    animation: calendar-popup 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 }

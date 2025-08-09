@@ -151,6 +151,19 @@ def get_cbirccat():
     return amtdf
 
 
+def get_cbircsplit():
+    """Get CBIRC split (analysis) data"""
+    splitdf = get_csvdf(DATA_FOLDER, "cbircsplit")
+    # Ensure numeric columns have reasonable types where applicable
+    for col in ["amount", "penalty_amount", "fine_amount"]:
+        if col in splitdf.columns:
+            try:
+                splitdf[col] = splitdf[col].astype(float)
+            except Exception as e:
+                logger.warning(f"{col} conversion failed in cbircsplit: {e}")
+    return splitdf
+
+
 @router.get("/check-files")
 async def check_saved_files(
     org_name: Optional[str] = Query(None, description="Organization name filter")
@@ -1115,3 +1128,185 @@ async def _run_selected_update_details_with_tracking(task_id: str, org_name: Org
     except Exception as e:
         task_service.fail_task(task_id, str(e))
         logger.error(f"Task {task_id} failed: {str(e)}")
+
+@router.get("/export")
+async def export_cases(
+    file_type: str = Query(..., description="Type of file to export: cbircsum, cbircdtl, cbirccat, or cbircsplit"),
+    start_date: str = Query(..., description="Start date for export (YYYY-MM-DD)"),
+    end_date: str = Query(..., description="End date for export (YYYY-MM-DD)"),
+):
+    try:
+        if file_type not in ["cbircsum", "cbircdtl", "cbirccat", "cbircsplit"]:
+            raise HTTPException(status_code=400, detail="Invalid file type")
+
+        # Check if data folder exists
+        if not os.path.exists(DATA_FOLDER):
+            raise HTTPException(status_code=404, detail=f"Data folder not found: {DATA_FOLDER}")
+        
+        # Check if CSV files exist for the requested type
+        pattern = os.path.join(DATA_FOLDER, f"{file_type}*.csv")
+        matching_files = glob.glob(pattern)
+        if not matching_files:
+            raise HTTPException(status_code=404, detail=f"No CSV files found matching pattern: {file_type}*.csv in {DATA_FOLDER}")
+
+        if file_type == "cbircsum":
+            df = get_cbircsum("")
+        elif file_type == "cbircdtl":
+            df = get_cbircdetail("")
+        elif file_type == "cbirccat":
+            df = get_cbirccat()
+            # Special handling: cbirccat needs to be filtered by cbircdtl dates via id join
+            # Get details dataframe to use its date column for filtering
+            dtldf = get_cbircdetail("")
+            if dtldf is None or dtldf.empty:
+                raise HTTPException(status_code=404, detail="No detail data available to filter cbirccat by date range")
+
+            # Ensure required columns
+            if "id" not in dtldf.columns or "发布日期" not in dtldf.columns:
+                raise HTTPException(status_code=400, detail="Detail dataset missing required columns for date filtering")
+
+            # Normalize and filter by date range on details
+            try:
+                dtldf["发布日期"] = pd.to_datetime(dtldf["发布日期"], errors='coerce')
+            except Exception:
+                pass
+            dtldf = dtldf.dropna(subset=["发布日期"]) 
+
+            try:
+                start_dt = pd.to_datetime(start_date)
+                end_dt = pd.to_datetime(end_date)
+            except Exception as e:
+                logger.error(f"Date parsing error: {e}")
+                raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD")
+
+            if end_dt < start_dt:
+                raise HTTPException(status_code=400, detail="end_date must be after start_date")
+
+            dtl_mask = (dtldf["发布日期"] >= start_dt) & (dtldf["发布日期"] <= end_dt)
+            dtldf = dtldf.loc[dtl_mask]
+            if dtldf.empty:
+                raise HTTPException(status_code=404, detail="No detail data in specified date range")
+
+            valid_ids = set(dtldf["id"].astype(str).unique().tolist())
+            if "id" not in df.columns:
+                raise HTTPException(status_code=400, detail="cbirccat dataset missing 'id' column for join filtering")
+
+            # Some CSVs might have ids as numeric; cast to string for consistent comparison
+            df["id"] = df["id"].astype(str)
+            df = df[df["id"].isin(valid_ids)]
+
+            if df.empty:
+                raise HTTPException(status_code=404, detail="No categorized data in specified date range")
+
+            # Output CSV directly and return early for cbirccat
+            stream = io.StringIO()
+            df.to_csv(stream, index=False)
+            stream.seek(0)
+            response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
+            response.headers["Content-Disposition"] = "attachment; filename=cbirccat.csv"
+            return response
+        elif file_type == "cbircsplit":
+            df = get_cbircsplit()
+            # Similar handling as cbirccat: filter by cbircdtl date via id join
+            dtldf = get_cbircdetail("")
+            if dtldf is None or dtldf.empty:
+                raise HTTPException(status_code=404, detail="No detail data available to filter cbircsplit by date range")
+
+            if "id" not in dtldf.columns or "发布日期" not in dtldf.columns:
+                raise HTTPException(status_code=400, detail="Detail dataset missing required columns for date filtering")
+
+            try:
+                dtldf["发布日期"] = pd.to_datetime(dtldf["发布日期"], errors='coerce')
+            except Exception:
+                pass
+            dtldf = dtldf.dropna(subset=["发布日期"]) 
+
+            try:
+                start_dt = pd.to_datetime(start_date)
+                end_dt = pd.to_datetime(end_date)
+            except Exception as e:
+                logger.error(f"Date parsing error: {e}")
+                raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD")
+
+            if end_dt < start_dt:
+                raise HTTPException(status_code=400, detail="end_date must be after start_date")
+
+            dtl_mask = (dtldf["发布日期"] >= start_dt) & (dtldf["发布日期"] <= end_dt)
+            dtldf = dtldf.loc[dtl_mask]
+            if dtldf.empty:
+                raise HTTPException(status_code=404, detail="No detail data in specified date range")
+
+            valid_ids = set(dtldf["id"].astype(str).unique().tolist())
+            if "id" not in df.columns:
+                raise HTTPException(status_code=400, detail="cbircsplit dataset missing 'id' column for join filtering")
+
+            df["id"] = df["id"].astype(str)
+            df = df[df["id"].isin(valid_ids)]
+
+            if df.empty:
+                raise HTTPException(status_code=404, detail="No split data in specified date range")
+
+            stream = io.StringIO()
+            df.to_csv(stream, index=False)
+            stream.seek(0)
+            response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
+            response.headers["Content-Disposition"] = "attachment; filename=cbircsplit.csv"
+            return response
+        
+        # Validate dataframe
+        if df is None or df.empty:
+            raise HTTPException(status_code=404, detail=f"No data available for export. Found files: {matching_files} but they contain no valid data.")
+
+        # Determine date column (if any)
+        date_col = None
+        for cand in ["发布日期", "publishDate", "date"]:
+            if cand in df.columns:
+                date_col = cand
+                break
+
+        # For non-cbirccat types, enforce having a date column and filter by range
+        if True:
+            if not date_col:
+                raise HTTPException(status_code=400, detail="No date column found in dataset")
+
+            # Normalize date column to date objects for comparison
+            try:
+                df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+            except Exception:
+                pass
+
+            # Drop rows with invalid dates
+            df = df.dropna(subset=[date_col])
+
+            # Parse input dates
+            try:
+                start_dt = pd.to_datetime(start_date)
+                end_dt = pd.to_datetime(end_date)
+            except Exception as e:
+                logger.error(f"Date parsing error: {e}")
+                raise HTTPException(status_code=400, detail="Invalid date format. Expected YYYY-MM-DD")
+
+            # Ensure ordering
+            if end_dt < start_dt:
+                raise HTTPException(status_code=400, detail="end_date must be after start_date")
+
+            # Filter
+            mask = (df[date_col] >= start_dt) & (df[date_col] <= end_dt)
+            df = df.loc[mask]
+
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No data in specified date range")
+
+        # Output CSV
+        stream = io.StringIO()
+        df.to_csv(stream, index=False)
+        stream.seek(0)
+        response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
+        response.headers["Content-Disposition"] = f"attachment; filename={file_type}.csv"
+        return response
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Export error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")

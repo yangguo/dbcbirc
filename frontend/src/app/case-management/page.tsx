@@ -41,12 +41,12 @@ export default function CaseManagementPage() {
       </div>
 
       <Tabs defaultValue="list" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="list">案例列表</TabsTrigger>
-          <TabsTrigger value="details">案例详情</TabsTrigger>
-          <TabsTrigger value="categories">分类管理</TabsTrigger>
-          <TabsTrigger value="update">案例更新</TabsTrigger>
-          <TabsTrigger value="import-export">导入导出</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+          <TabsTrigger value="list" className="text-xs sm:text-sm">案例列表</TabsTrigger>
+          <TabsTrigger value="details" className="text-xs sm:text-sm">案例详情</TabsTrigger>
+          <TabsTrigger value="categories" className="text-xs sm:text-sm">分类管理</TabsTrigger>
+          <TabsTrigger value="update" className="text-xs sm:text-sm">案例更新</TabsTrigger>
+          <TabsTrigger value="import-export" className="text-xs sm:text-sm">导入导出</TabsTrigger>
         </TabsList>
 
         <TabsContent value="list" className="space-y-4">
