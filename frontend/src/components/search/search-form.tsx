@@ -1,11 +1,12 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DatePicker } from '@/components/ui/date-picker'
 import { CaseSearchRequest } from '@/lib/api'
 
 interface SearchFormProps {
@@ -13,13 +14,20 @@ interface SearchFormProps {
 }
 
 export function SearchForm({ onSearch }: SearchFormProps) {
-  const { register, handleSubmit, reset } = useForm<CaseSearchRequest>()
+  const { register, handleSubmit, reset, control } = useForm<CaseSearchRequest>()
 
-  const onSubmit = (data: CaseSearchRequest) => {
-    // Clean up empty strings
-    const cleanData = Object.fromEntries(
-      Object.entries(data).filter(([_, value]) => value !== '' && value !== undefined)
-    ) as CaseSearchRequest
+  const onSubmit = (data: any) => {
+    // Clean up empty strings and convert dates
+    const cleanData: any = {}
+    
+    Object.entries(data).forEach(([key, value]) => {
+      if (value instanceof Date) {
+        // Convert Date objects to YYYY-MM-DD strings
+        cleanData[key] = value.toISOString().split('T')[0]
+      } else if (value !== '' && value !== undefined) {
+        cleanData[key] = value
+      }
+    })
     
     onSearch?.(cleanData)
   }
@@ -37,22 +45,34 @@ export function SearchForm({ onSearch }: SearchFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="start_date">开始日期</Label>
-              <Input
-                id="start_date"
-                type="date"
-                {...register('start_date')}
+              <Controller
+                name="start_date"
+                control={control}
+                render={({ field }) => (
+                  <DatePicker
+                    date={field.value ? new Date(field.value) : undefined}
+                    onDateChange={field.onChange}
+                    placeholder="选择开始日期"
+                  />
+                )}
               />
             </div>
 
             <div className="grid gap-2">
               <Label htmlFor="end_date">结束日期</Label>
-              <Input
-                id="end_date"
-                type="date"
-                {...register('end_date')}
+              <Controller
+                name="end_date"
+                control={control}
+                render={({ field }) => (
+                  <DatePicker
+                    date={field.value ? new Date(field.value) : undefined}
+                    onDateChange={field.onChange}
+                    placeholder="选择结束日期"
+                  />
+                )}
               />
             </div>
 
@@ -139,7 +159,7 @@ export function SearchForm({ onSearch }: SearchFormProps) {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-4">
             <Button type="submit" className="flex-1">
               搜索
             </Button>

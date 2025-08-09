@@ -217,8 +217,27 @@ class ApiClient {
   }
 
   // Export Cases CSV
-  async exportCasesCSV(): Promise<Blob> {
-    const response = await fetch(`${this.baseUrl}/api/v1/analytics/export/csv`)
+  async exportCasesCSV(searchParams?: CaseSearchRequest): Promise<Blob> {
+    let url = `${this.baseUrl}/api/v1/analytics/export/csv`
+    
+    // If search parameters are provided, add them as query parameters
+    if (searchParams && Object.keys(searchParams).length > 0) {
+      const params = new URLSearchParams()
+      Object.entries(searchParams).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '' && !Number.isNaN(value)) {
+          // Skip NaN values for numbers
+          if (typeof value === 'number' && Number.isNaN(value)) {
+            return
+          }
+          params.append(key, String(value))
+        }
+      })
+      if (params.toString()) {
+        url += `?${params.toString()}`
+      }
+    }
+    
+    const response = await fetch(url)
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
