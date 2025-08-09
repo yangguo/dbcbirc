@@ -1131,12 +1131,23 @@ async def get_file_columns(file: UploadFile = File(...)):
         
         # 返回列名和前几行数据作为预览
         columns = df.columns.tolist()
-        preview_data = df.to_dict('records')
+
+        # 清洗预览数据中的 NaN/Infinity，确保 JSON 合规
+        try:
+            # 仅取前 50 行作为预览，避免过大响应
+            preview_json_str = df.head(50).to_json(orient='records', force_ascii=False)
+            import json as _json
+            preview_data = _json.loads(preview_json_str)
+        except Exception:
+            # 回退方案：把 NaN 替换为 None 再导出
+            import numpy as _np
+            cleaned_df = df.replace([_np.nan, _np.inf, -_np.inf], None)
+            preview_data = cleaned_df.head(50).to_dict('records')
         
         return {
             "columns": columns,
             "preview_data": preview_data,
-            "total_rows": len(df)
+            "total_rows": int(len(df))
         }
         
     except Exception as e:
