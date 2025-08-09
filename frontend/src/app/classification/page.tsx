@@ -58,6 +58,10 @@ export default function ClassificationPage() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [fileColumns, setFileColumns] = useState<string[]>([])
   const [previewData, setPreviewData] = useState<any[]>([])
+  const [selectableData, setSelectableData] = useState<any[]>([])
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string | number>>(new Set())
+  const [selectAll, setSelectAll] = useState(true)
+  const [previewLimit, setPreviewLimit] = useState<string>('50')
   const [selectedIdColumn, setSelectedIdColumn] = useState<string>('')
   const [selectedContentColumn, setSelectedContentColumn] = useState<string>('')
   const [showColumnSelection, setShowColumnSelection] = useState(false)
@@ -406,6 +410,7 @@ export default function ClassificationPage() {
       // 获取文件列信息
       const formData = new FormData()
       formData.append('file', file)
+      formData.append('preview_limit', previewLimit)
       
       try {
         const response = await fetch('http://localhost:8000/api/v1/classification/get-file-columns', {
@@ -417,6 +422,16 @@ export default function ClassificationPage() {
           const result = await response.json()
           setFileColumns(result.columns)
           setPreviewData(result.preview_data)
+          setSelectableData(result.preview_data)
+          // 默认全选
+          const initialIds = new Set<string | number>()
+          const idKey = result.columns.find((c: string) => ['id','ID','序号','编号','index'].some(k => c.toLowerCase().includes(k.toLowerCase()))) || result.columns[0]
+          result.preview_data.forEach((row: any, idx: number) => {
+            const key = row[idKey] ?? idx
+            initialIds.add(key)
+          })
+          setSelectedRowIds(initialIds)
+          setSelectAll(true)
           setShowColumnSelection(true)
           
           // 自动选择可能的ID和内容列
@@ -456,6 +471,39 @@ export default function ClassificationPage() {
     }
   }
 
+  // 基于已上传文件与当前预览数量设置，刷新预览
+  const refreshPreview = async () => {
+    if (!uploadedFile) return
+    try {
+      const formData = new FormData()
+      formData.append('file', uploadedFile)
+      formData.append('preview_limit', previewLimit)
+
+      const response = await fetch('http://localhost:8000/api/v1/classification/get-file-columns', {
+        method: 'POST',
+        body: formData
+      })
+      if (!response.ok) throw new Error('无法读取文件列信息')
+
+      const result = await response.json()
+      setFileColumns(result.columns)
+      setPreviewData(result.preview_data)
+      setSelectableData(result.preview_data)
+
+      // 预览刷新后默认全选
+      const initialIds = new Set<string | number>()
+      const idKey = result.columns.find((c: string) => ['id','ID','序号','编号','index'].some(k => c.toLowerCase().includes(k.toLowerCase()))) || result.columns[0]
+      result.preview_data.forEach((row: any, idx: number) => {
+        const key = row[idKey] ?? idx
+        initialIds.add(key)
+      })
+      setSelectedRowIds(initialIds)
+      setSelectAll(true)
+    } catch (e) {
+      toast({ title: '错误', description: '刷新预览失败', variant: 'destructive' })
+    }
+  }
+
   // 批量处罚信息提取 - 实时版本
   const handleBatchExtractRealTime = async () => {
     if (!uploadedFile) {
@@ -487,6 +535,11 @@ export default function ClassificationPage() {
     formData.append('file', uploadedFile)
     formData.append('id_column', selectedIdColumn)
     formData.append('content_column', selectedContentColumn)
+    // 发送选择的记录索引（基于预览顺序）或ID列表
+    try {
+      const selectedIdsArray = Array.from(selectedRowIds)
+      formData.append('selected_ids', JSON.stringify(selectedIdsArray))
+    } catch {}
 
     try {
       const response = await fetch('http://localhost:8000/api/v1/classification/batch-extract-penalty-info-stream', {
@@ -1241,9 +1294,9 @@ export default function ClassificationPage() {
               {showColumnSelection && fileColumns.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg">字段选择</CardTitle>
+                    <CardTitle className="text-lg">字段与数据选择</CardTitle>
                     <CardDescription>
-                      请选择ID字段和内容字段进行处罚信息提取
+                      请选择ID字段、内容字段，并在下方预览中勾选要提取的记录（默认全选）
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -1283,11 +1336,75 @@ export default function ClassificationPage() {
                     {/* 数据预览 */}
                     {previewData.length > 0 && (
                       <div className="space-y-2">
-                        <Label>数据预览</Label>
-                        <div className="border rounded-lg overflow-auto max-h-64">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <Label>数据预览与选择</Label>
+                          <div className="flex items-center gap-3 text-sm">
+                            <label className="flex items-center gap-1 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={selectAll}
+                                onChange={(e) => {
+                                  const checked = e.target.checked
+                                  setSelectAll(checked)
+                                  if (checked) {
+                                    const allIds = new Set<string | number>()
+                                    const idKey = selectedIdColumn || fileColumns[0]
+                                    selectableData.forEach((row, idx) => {
+                                      const key = row[idKey] ?? idx
+                                      allIds.add(key)
+                                    })
+                                    setSelectedRowIds(allIds)
+                                  } else {
+                                    setSelectedRowIds(new Set())
+                                  }
+                                }}
+                              />
+                              全选
+                            </label>
+                            <span className="text-muted-foreground">已选 {selectedRowIds.size} / {selectableData.length}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">预览数量</span>
+                              <Select value={previewLimit} onValueChange={setPreviewLimit}>
+                                <SelectTrigger className="h-8 w-28">
+                                  <SelectValue placeholder="数量" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="50">50</SelectItem>
+                                  <SelectItem value="100">100</SelectItem>
+                                  <SelectItem value="200">200</SelectItem>
+                                  <SelectItem value="500">500</SelectItem>
+                                  <SelectItem value="all">全部</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button size="sm" variant="outline" onClick={refreshPreview}>更新预览</Button>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="border rounded-lg overflow-auto max-h-80">
                           <Table>
                             <TableHeader>
                               <TableRow>
+                                <TableHead className="w-10">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectAll}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked
+                                      setSelectAll(checked)
+                                      if (checked) {
+                                        const allIds = new Set<string | number>()
+                                        const idKey = selectedIdColumn || fileColumns[0]
+                                        selectableData.forEach((row, idx) => {
+                                          const key = row[idKey] ?? idx
+                                          allIds.add(key)
+                                        })
+                                        setSelectedRowIds(allIds)
+                                      } else {
+                                        setSelectedRowIds(new Set())
+                                      }
+                                    }}
+                                  />
+                                </TableHead>
                                 {fileColumns.map((column) => (
                                   <TableHead key={column} className="min-w-[120px]">
                                     {column}
@@ -1306,15 +1423,36 @@ export default function ClassificationPage() {
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {previewData.map((row, index) => (
-                                <TableRow key={index}>
-                                  {fileColumns.map((column) => (
-                                    <TableCell key={column} className="max-w-[200px] truncate">
-                                      {String(row[column] || '')}
+                              {selectableData.map((row, index) => {
+                                const idKey = selectedIdColumn || fileColumns[0]
+                                const rowId = row[idKey] ?? index
+                                const checked = selectedRowIds.has(rowId)
+                                return (
+                                  <TableRow key={index} className={checked ? 'bg-muted/30' : ''}>
+                                    <TableCell>
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        onChange={(e) => {
+                                          const next = new Set(selectedRowIds)
+                                          if (e.target.checked) {
+                                            next.add(rowId)
+                                          } else {
+                                            next.delete(rowId)
+                                          }
+                                          setSelectedRowIds(next)
+                                          setSelectAll(next.size === selectableData.length)
+                                        }}
+                                      />
                                     </TableCell>
-                                  ))}
-                                </TableRow>
-                              ))}
+                                    {fileColumns.map((column) => (
+                                      <TableCell key={column} className="max-w-[200px] truncate">
+                                        {String(row[column] ?? '')}
+                                      </TableCell>
+                                    ))}
+                                  </TableRow>
+                                )
+                              })}
                             </TableBody>
                           </Table>
                         </div>

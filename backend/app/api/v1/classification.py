@@ -555,7 +555,8 @@ async def save_successful_records(request: SaveSuccessfulRecordsRequest):
 async def batch_extract_penalty_info(
     file: UploadFile = File(...),
     id_column: str = Form("id"),
-    content_column: str = Form("content")
+    content_column: str = Form("content"),
+    selected_ids: Optional[str] = Form(None),
 ):
     """批量处罚信息提取"""
     import time
@@ -587,6 +588,15 @@ async def batch_extract_penalty_info(
         if content_column not in df.columns:
             raise HTTPException(status_code=400, detail=f"文件中不存在列: {content_column}")
         
+        # 过滤选择的记录（可选）
+        if selected_ids:
+            try:
+                import json as _json
+                ids = set(map(str, _json.loads(selected_ids)))
+                df = df[df[id_column].astype(str).isin(ids)]
+            except Exception:
+                pass
+
         # 初始化日志和统计信息
         results = []
         processing_logs = []
@@ -829,7 +839,8 @@ async def batch_extract_penalty_info(
 async def batch_extract_penalty_info_stream(
     file: UploadFile = File(...),
     id_column: str = Form("id"),
-    content_column: str = Form("content")
+    content_column: str = Form("content"),
+    selected_ids: Optional[str] = Form(None),
 ):
     """批量处罚信息提取 - 流式响应版本"""
     import time
@@ -888,6 +899,15 @@ async def batch_extract_penalty_info_stream(
                     "Content-Type": "text/event-stream"
                 }
             )
+
+        # 如果提供了选中的ID列表，则过滤 DataFrame
+        if selected_ids:
+            try:
+                import json as _json
+                ids = set(map(str, _json.loads(selected_ids)))
+                df = df[df[id_column].astype(str).isin(ids)]
+            except Exception:
+                pass
     except Exception as e:
         async def error_generator():
             yield f"data: {{\"type\": \"error\", \"message\": \"文件读取失败: {str(e)}\"}}\n\n"
@@ -1113,8 +1133,14 @@ async def batch_extract_penalty_info_stream(
     )
 
 
+from typing import Any, Dict
+
+
 @router.post("/get-file-columns")
-async def get_file_columns(file: UploadFile = File(...)):
+async def get_file_columns(
+    file: UploadFile = File(...),
+    preview_limit: Optional[str] = Form(None),
+):
     """获取上传文件的列名"""
     try:
         # 验证文件类型
@@ -1129,20 +1155,31 @@ async def get_file_columns(file: UploadFile = File(...)):
         else:
             df = pd.read_excel(io.BytesIO(contents))
         
-        # 返回列名和前几行数据作为预览
+        # 返回列名和数据预览（支持可选完整预览）
         columns = df.columns.tolist()
+
+        # 计算预览行数
+        if preview_limit is None:
+            limit_rows = 50
+        else:
+            if isinstance(preview_limit, str) and preview_limit.lower() == 'all':
+                limit_rows = len(df)
+            else:
+                try:
+                    limit_rows = max(0, int(preview_limit))
+                except Exception:
+                    limit_rows = 50
 
         # 清洗预览数据中的 NaN/Infinity，确保 JSON 合规
         try:
-            # 仅取前 50 行作为预览，避免过大响应
-            preview_json_str = df.head(50).to_json(orient='records', force_ascii=False)
+            preview_json_str = df.head(limit_rows).to_json(orient='records', force_ascii=False)
             import json as _json
             preview_data = _json.loads(preview_json_str)
         except Exception:
             # 回退方案：把 NaN 替换为 None 再导出
             import numpy as _np
             cleaned_df = df.replace([_np.nan, _np.inf, -_np.inf], None)
-            preview_data = cleaned_df.head(50).to_dict('records')
+            preview_data = cleaned_df.head(limit_rows).to_dict('records')
         
         return {
             "columns": columns,
