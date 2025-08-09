@@ -132,6 +132,47 @@ export function CaseStats() {
           <div className="absolute bottom-0 left-0 w-16 h-16 bg-white/5 rounded-full translate-y-8 -translate-x-8"></div>
         </Card>
       ))}
+
+      {/* Dataset overview cards */}
+      {stats && (
+        <>
+          {[ 
+            { key: 'cbircsum', title: 'cbircsum 概览', totalKey: 'cbircsum_total', rangeKey: 'cbircsum_date_range' },
+            { key: 'cbircdtl', title: 'cbircdtl 概览', totalKey: 'cbircdtl_total', rangeKey: 'cbircdtl_date_range' },
+            { key: 'cbirccat', title: 'cbirccat 概览', totalKey: 'cbirccat_total', rangeKey: 'cbirccat_date_range' },
+            { key: 'cbircsplit', title: 'cbircsplit 概览', totalKey: 'cbircsplit_total', rangeKey: 'cbircsplit_date_range' },
+          ].map((ds, idx) => (
+            <Card 
+              key={ds.key}
+              className={`card-hover glass-effect border-white/20 bg-gradient-to-br from-slate-500/10 to-slate-700/10 relative overflow-hidden`}
+              style={{ animationDelay: `${(idx + statCards.length) * 100}ms` }}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {ds.title}
+                  </CardTitle>
+                  <div className={`p-2 rounded-lg bg-gradient-to-r from-slate-500 to-slate-700 shadow-lg`}>
+                    <FileText className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold text-foreground">
+                    {Number((stats as any)?.[ds.totalKey] || 0).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {((stats as any)?.[ds.rangeKey]?.start && (stats as any)?.[ds.rangeKey]?.end)
+                      ? `${(stats as any)?.[ds.rangeKey]?.start} 至 ${(stats as any)?.[ds.rangeKey]?.end}`
+                      : '暂无时间范围'}
+                  </div>
+                </div>
+              </CardContent>
+              <div className="absolute top-0 right-0 w-20 h-20 bg-white/5 rounded-full -translate-y-10 translate-x-10"></div>
+              <div className="absolute bottom-0 left-0 w-16 h-16 bg-white/5 rounded-full translate-y-8 -translate-x-8"></div>
+            </Card>
+          ))}
+        </>
+      )}
     </>
   )
 }

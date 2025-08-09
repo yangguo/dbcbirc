@@ -7,6 +7,7 @@ import glob
 import re
 from app.core.database import db_manager
 from app.core.config import settings
+import logging
 from app.models.case import (
     CaseDetail, CaseSummary, CaseSearchRequest, CaseSearchResponse,
     CaseStats, MonthlyTrend, RegionalStats, OrganizationType
@@ -15,6 +16,7 @@ from app.models.case import (
 
 class CaseService:
     def __init__(self):
+        self.logger = logging.getLogger(__name__)
         self.org_mapping = {
             "银保监会机关": "jiguan",
             "银保监局本级": "benji", 
@@ -26,22 +28,47 @@ class CaseService:
         self.local_data_folder = settings.DATA_FOLDER or "cbirc"
 
     def _load_local_csvs(self, prefix: str) -> pd.DataFrame:
-        """Load and concatenate local CSV files matching prefix from cbirc/"""
+        """Load and concatenate local CSV files matching prefix from data folder.
+        Be tolerant to BOM, encodings, and inconsistent headers.
+        """
         try:
-            pattern = os.path.join(self.local_data_folder, f"{prefix}*.csv")
-            files = sorted(glob.glob(pattern))
+            # Support multiple candidate folders without changing settings
+            candidate_dirs = [
+                self.local_data_folder,
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), self.local_data_folder),
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), self.local_data_folder),
+            ]
+            files: List[str] = []
+            for base in candidate_dirs:
+                pattern = os.path.join(base, f"{prefix}*.csv")
+                files.extend(glob.glob(pattern))
+            files = sorted(list(dict.fromkeys(files)))  # de-duplicate and sort
             if not files:
                 return pd.DataFrame()
+
             dataframes = []
             for file_path in files:
                 try:
-                    df = pd.read_csv(file_path)
+                    # Try utf-8-sig first to strip BOM if present
+                    try:
+                        df = pd.read_csv(file_path, encoding="utf-8-sig", low_memory=False)
+                    except Exception:
+                        try:
+                            df = pd.read_csv(file_path, encoding="utf-8", low_memory=False)
+                        except Exception:
+                            df = pd.read_csv(file_path, encoding="latin1", low_memory=False)
+
+                    # Normalize column names (strip spaces and BOM)
+                    df.columns = [str(c).strip().lstrip('\ufeff') for c in df.columns]
+
                     dataframes.append(df)
                 except Exception as read_err:
                     print(f"Failed to read {file_path}: {read_err}")
             if not dataframes:
                 return pd.DataFrame()
             combined = pd.concat(dataframes, ignore_index=True)
+            # Drop fully empty columns
+            combined = combined.dropna(axis=1, how='all')
             return combined
         except Exception as e:
             print(f"Local CSV load error for prefix {prefix}: {e}")
@@ -70,21 +97,25 @@ class CaseService:
 
         # Fallback to local CSVs
         if df.empty:
-            # When no org specified, aggregate across all detail files
+            # When no org specified, aggregate across all summary files
             if org_code:
                 df = self._load_local_csvs(collection_name)
             else:
                 candidates = [
-                    self._load_local_csvs("cbircdtljiguan"),
-                    self._load_local_csvs("cbircdtlbenji"),
-                    self._load_local_csvs("cbircdtlfenju"),
-                    self._load_local_csvs("cbircdtl"),
+                    self._load_local_csvs("cbircsumjiguan"),
+                    self._load_local_csvs("cbircsumbenji"),
+                    self._load_local_csvs("cbircsumfenju"),
+                    self._load_local_csvs("cbircsum"),
                 ]
                 non_empty = [d for d in candidates if not d.empty]
                 df = pd.concat(non_empty, ignore_index=True) if non_empty else pd.DataFrame()
         
-        if not df.empty and "publishDate" in df.columns:
-            df["发布日期"] = pd.to_datetime(df["publishDate"]).dt.date
+        if not df.empty:
+            # Normalize summary publish date
+            if "publishDate" in df.columns:
+                df["发布日期"] = pd.to_datetime(df["publishDate"], errors='coerce').dt.date
+            elif "publish_date" in df.columns:
+                df["发布日期"] = pd.to_datetime(df["publish_date"], errors='coerce').dt.date
         return df
     
     async def get_case_detail(self, org_name: str = "") -> pd.DataFrame:
@@ -327,13 +358,83 @@ class CaseService:
     async def get_case_stats(self) -> CaseStats:
         """Get overall case statistics"""
         try:
+            # Load all relevant datasets
+            summary_df = await self.get_case_summary("")
             detail_df = await self.get_case_detail("")
+            analysis_df = await self.get_case_analysis("")
             category_df = await self.get_case_categories()
             
+            # Compute dataset overview first (regardless of detail availability)
+            def compute_total_and_range(df: pd.DataFrame, preferred_id: Optional[str] = None) -> Tuple[int, Dict[str, str]]:
+                if df is None or df.empty:
+                    return 0, {}
+                # Count by unique id if present
+                identifier_col = None
+                candidates = []
+                if preferred_id:
+                    candidates.append(preferred_id)
+                candidates.extend(["id", "docId"])  # generic fallbacks
+                # de-duplicate while preserving order
+                seen = set()
+                candidates = [c for c in candidates if not (c in seen or seen.add(c))]
+                for candidate in candidates:
+                    if candidate in df.columns:
+                        identifier_col = candidate
+                        break
+                if identifier_col:
+                    # Ensure consistent type for uniqueness
+                    total = df[identifier_col].astype(str).nunique()
+                else:
+                    total = len(df)
+                # Determine date column priority
+                date_col_name = None
+                for candidate in ["发布日期", "publishDate", "publish_date", "penalty_date", "date"]:
+                    if candidate in df.columns:
+                        date_col_name = candidate
+                        break
+                if not date_col_name:
+                    return total, {}
+                date_series = pd.to_datetime(df[date_col_name], errors='coerce')
+                date_series = date_series.dropna()
+                if date_series.empty:
+                    return total, {}
+                return total, {"start": str(date_series.min().date()), "end": str(date_series.max().date())}
+
+            cbircsum_total, cbircsum_range = compute_total_and_range(summary_df, preferred_id="docId")
+            cbircdtl_total, cbircdtl_range = compute_total_and_range(detail_df, preferred_id="id")
+            cbirccat_total, cbirccat_range = compute_total_and_range(category_df, preferred_id="id")
+            cbircsplit_total, cbircsplit_range = compute_total_and_range(analysis_df, preferred_id="id")
+
+            # Debug logs for verification
+            try:
+                self.logger.info(
+                    f"Datasets loaded: cbircsum={len(summary_df) if summary_df is not None else 0}, "
+                    f"cbircdtl={len(detail_df) if detail_df is not None else 0}, "
+                    f"cbirccat={len(category_df) if category_df is not None else 0}, "
+                    f"cbircsplit={len(analysis_df) if analysis_df is not None else 0}"
+                )
+                self.logger.info(
+                    f"Computed totals: cbircsum={cbircsum_total}, cbircdtl={cbircdtl_total}, "
+                    f"cbirccat={cbirccat_total}, cbircsplit={cbircsplit_total}"
+                )
+            except Exception:
+                pass
+
             if detail_df.empty:
+                # Return with dataset overviews even when detail data is missing
                 return CaseStats(
-                    total_cases=0, total_amount=0, avg_amount=0,
-                    date_range={}, by_province={}, by_industry={}, by_month={}
+                    total_cases=int(cbircdtl_total),
+                    total_amount=0, avg_amount=0,
+                    date_range=cbircdtl_range,
+                    by_province={}, by_industry={}, by_month={},
+                    cbircsum_total=int(cbircsum_total),
+                    cbircsum_date_range=cbircsum_range,
+                    cbircdtl_total=int(cbircdtl_total),
+                    cbircdtl_date_range=cbircdtl_range,
+                    cbirccat_total=int(cbirccat_total),
+                    cbirccat_date_range=cbirccat_range,
+                    cbircsplit_total=int(cbircsplit_total),
+                    cbircsplit_date_range=cbircsplit_range,
                 )
             
             # Merge with category data
@@ -351,12 +452,15 @@ class CaseService:
             total_amount = valid_amounts.sum() if not valid_amounts.empty else 0
             avg_amount = valid_amounts.mean() if not valid_amounts.empty else 0
             
-            # Date range
+            # Date range (robust handling of mixed types)
             date_range = {}
             if "发布日期" in merged_df.columns and not merged_df["发布日期"].empty:
-                min_date = merged_df["发布日期"].min()
-                max_date = merged_df["发布日期"].max()
-                date_range = {"start": str(min_date), "end": str(max_date)}
+                pub_series = pd.to_datetime(merged_df["发布日期"], errors='coerce')
+                pub_series = pub_series.dropna()
+                if not pub_series.empty:
+                    min_date = pub_series.min().date()
+                    max_date = pub_series.max().date()
+                    date_range = {"start": str(min_date), "end": str(max_date)}
             
             # Province statistics
             by_province = {}
@@ -373,10 +477,9 @@ class CaseService:
             # Monthly statistics
             by_month = {}
             if "发布日期" in merged_df.columns:
-                merged_df["month"] = merged_df["发布日期"].apply(
-                    lambda x: x.strftime("%Y-%m") if pd.notna(x) else ""
-                )
-                month_counts = merged_df["month"].value_counts()
+                pub_series = pd.to_datetime(merged_df["发布日期"], errors='coerce')
+                month_series = pub_series.dt.strftime("%Y-%m").fillna("")
+                month_counts = month_series.value_counts()
                 by_month = month_counts.to_dict()
             
             return CaseStats(
@@ -386,7 +489,15 @@ class CaseService:
                 date_range=date_range,
                 by_province=by_province,
                 by_industry=by_industry,
-                by_month=by_month
+                by_month=by_month,
+                cbircsum_total=int(cbircsum_total),
+                cbircsum_date_range=cbircsum_range,
+                cbircdtl_total=int(cbircdtl_total),
+                cbircdtl_date_range=cbircdtl_range,
+                cbirccat_total=int(cbirccat_total),
+                cbirccat_date_range=cbirccat_range,
+                cbircsplit_total=int(cbircsplit_total),
+                cbircsplit_date_range=cbircsplit_range,
             )
             
         except Exception as e:

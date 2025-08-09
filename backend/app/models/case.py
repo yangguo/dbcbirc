@@ -100,6 +100,15 @@ class CaseStats(BaseModel):
     by_province: Dict[str, int]
     by_industry: Dict[str, int]
     by_month: Dict[str, int]
+    # Additional dataset overviews
+    cbircsum_total: int = 0
+    cbircsum_date_range: Dict[str, str] = {}
+    cbircdtl_total: int = 0
+    cbircdtl_date_range: Dict[str, str] = {}
+    cbirccat_total: int = 0
+    cbirccat_date_range: Dict[str, str] = {}
+    cbircsplit_total: int = 0
+    cbircsplit_date_range: Dict[str, str] = {}
 
 
 class MonthlyTrend(BaseModel):
