@@ -15,10 +15,7 @@ const SystemStatus = dynamicImport(() => import('@/components/admin/system-statu
   loading: () => <div className="p-6 text-center">加载中...</div>
 })
 
-const DataManagement = dynamicImport(() => import('@/components/admin/data-management').then(mod => ({ default: mod.DataManagement })), {
-  ssr: false,
-  loading: () => <div className="p-6 text-center">加载中...</div>
-})
+
 
 export default function AdminPage() {
   return (
@@ -34,7 +31,6 @@ export default function AdminPage() {
         <TabsList>
           <TabsTrigger value="dashboard">控制面板</TabsTrigger>
           <TabsTrigger value="status">系统状态</TabsTrigger>
-          <TabsTrigger value="data">数据管理</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-4">
@@ -43,10 +39,6 @@ export default function AdminPage() {
 
         <TabsContent value="status" className="space-y-4">
           <SystemStatus />
-        </TabsContent>
-
-        <TabsContent value="data" className="space-y-4">
-          <DataManagement />
         </TabsContent>
       </Tabs>
     </div>
