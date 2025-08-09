@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     
     # File Storage
-    DATA_FOLDER: str = "cbirc"
+    DATA_FOLDER: str = "../cbirc"
     
     class Config:
         env_file = ".env"

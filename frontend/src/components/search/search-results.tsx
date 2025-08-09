@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { apiClient, CaseSearchRequest, CaseDetail } from '@/lib/api'
+import { apiClient, CaseSearchRequest, CaseDetail, CaseSearchResponse } from '@/lib/api'
 import { ChevronLeft, ChevronRight, ExternalLink, Download } from 'lucide-react'
 
 interface SearchResultsProps {
@@ -16,7 +16,7 @@ interface SearchResultsProps {
 export function SearchResults({ searchParams = {}, onPageChange }: SearchResultsProps) {
   const [selectedCase, setSelectedCase] = useState<CaseDetail | null>(null)
 
-  const { data: searchResults, isLoading, error } = useQuery({
+  const { data: searchResults, isLoading, error } = useQuery<CaseSearchResponse>({
     queryKey: ['search-cases', searchParams],
     queryFn: () => apiClient.searchCases(searchParams),
     enabled: Object.keys(searchParams).length > 0,

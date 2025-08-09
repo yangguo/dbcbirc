@@ -2,8 +2,11 @@ import pandas as pd
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import date, datetime
+import os
+import glob
 import re
 from app.core.database import db_manager
+from app.core.config import settings
 from app.models.case import (
     CaseDetail, CaseSummary, CaseSearchRequest, CaseSearchResponse,
     CaseStats, MonthlyTrend, RegionalStats, OrganizationType
@@ -18,6 +21,31 @@ class CaseService:
             "银保监分局本级": "fenju",
             "": ""
         }
+        # Use DB flag and local data folder from settings
+        self.use_db: bool = not settings.DISABLE_DATABASE
+        self.local_data_folder = settings.DATA_FOLDER or "cbirc"
+
+    def _load_local_csvs(self, prefix: str) -> pd.DataFrame:
+        """Load and concatenate local CSV files matching prefix from cbirc/"""
+        try:
+            pattern = os.path.join(self.local_data_folder, f"{prefix}*.csv")
+            files = sorted(glob.glob(pattern))
+            if not files:
+                return pd.DataFrame()
+            dataframes = []
+            for file_path in files:
+                try:
+                    df = pd.read_csv(file_path)
+                    dataframes.append(df)
+                except Exception as read_err:
+                    print(f"Failed to read {file_path}: {read_err}")
+            if not dataframes:
+                return pd.DataFrame()
+            combined = pd.concat(dataframes, ignore_index=True)
+            return combined
+        except Exception as e:
+            print(f"Local CSV load error for prefix {prefix}: {e}")
+            return pd.DataFrame()
         
     def _split_words(self, text: str) -> str:
         """Split string by space into words, add regex patterns"""
@@ -28,72 +56,138 @@ class CaseService:
         return "".join(words)
     
     async def get_case_summary(self, org_name: str = "") -> pd.DataFrame:
-        """Get case summary data"""
+        """Get case summary data (DB or local CSV fallback)"""
         org_code = self.org_mapping.get(org_name, "")
         collection_name = f"cbircsum{org_code}"
         
-        try:
-            df = await db_manager.get_dataframe(collection_name)
-            if not df.empty and "publishDate" in df.columns:
-                df["发布日期"] = pd.to_datetime(df["publishDate"]).dt.date
-            return df
-        except Exception as e:
-            print(f"Error getting case summary: {e}")
-            return pd.DataFrame()
+        # Try DB first only if enabled
+        df = pd.DataFrame()
+        if self.use_db:
+            try:
+                df = await db_manager.get_dataframe(collection_name)
+            except Exception as e:
+                print(f"Error getting case summary (db): {e}")
+
+        # Fallback to local CSVs
+        if df.empty:
+            # When no org specified, aggregate across all detail files
+            if org_code:
+                df = self._load_local_csvs(collection_name)
+            else:
+                candidates = [
+                    self._load_local_csvs("cbircdtljiguan"),
+                    self._load_local_csvs("cbircdtlbenji"),
+                    self._load_local_csvs("cbircdtlfenju"),
+                    self._load_local_csvs("cbircdtl"),
+                ]
+                non_empty = [d for d in candidates if not d.empty]
+                df = pd.concat(non_empty, ignore_index=True) if non_empty else pd.DataFrame()
+        
+        if not df.empty and "publishDate" in df.columns:
+            df["发布日期"] = pd.to_datetime(df["publishDate"]).dt.date
+        return df
     
     async def get_case_detail(self, org_name: str = "") -> pd.DataFrame:
-        """Get case detail data"""
+        """Get case detail data (DB or local CSV fallback)"""
         org_code = self.org_mapping.get(org_name, "")
         collection_name = f"cbircdtl{org_code}"
         
-        try:
-            df = await db_manager.get_dataframe(collection_name)
-            if df.empty:
-                return pd.DataFrame()
-                
-            # Check required columns
-            required_columns = ["title", "subtitle", "date", "doc", "id"]
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            if missing_columns:
-                print(f"Missing columns: {missing_columns}")
-                return pd.DataFrame()
-            
-            # Process data
-            result_df = df[required_columns].copy()
-            result_df["date"] = result_df["date"].str.split(".").str[0]
-            result_df["date"] = pd.to_datetime(result_df["date"], format="%Y-%m-%d %H:%M:%S").dt.date
-            result_df.columns = ["标题", "文号", "发布日期", "内容", "id"]
-            
-            return result_df
-        except Exception as e:
-            print(f"Error getting case detail: {e}")
+        # Try DB first only if enabled
+        df = pd.DataFrame()
+        if self.use_db:
+            try:
+                df = await db_manager.get_dataframe(collection_name)
+            except Exception as e:
+                print(f"Error getting case detail (db): {e}")
+
+        # Fallback to local CSVs
+        if df.empty:
+            if org_code:
+                df = self._load_local_csvs(collection_name)
+            else:
+                # Aggregate across all known detail prefixes when no org specified
+                candidates = [
+                    self._load_local_csvs("cbircdtljiguan"),
+                    self._load_local_csvs("cbircdtlbenji"),
+                    self._load_local_csvs("cbircdtlfenju"),
+                    self._load_local_csvs("cbircdtl"),
+                ]
+                non_empty = [d for d in candidates if not d.empty]
+                df = pd.concat(non_empty, ignore_index=True) if non_empty else pd.DataFrame()
+        
+        if df.empty:
             return pd.DataFrame()
+        
+        # Check required columns
+        required_columns = ["title", "subtitle", "date", "doc", "id"]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            print(f"Missing columns: {missing_columns}")
+            return pd.DataFrame()
+        
+        # Process data
+        result_df = df[required_columns].copy()
+        # Robust date parsing
+        result_df["date"] = pd.to_datetime(result_df["date"], errors='coerce').dt.date
+        result_df.columns = ["标题", "文号", "发布日期", "内容", "id"]
+        
+        return result_df
     
     async def get_case_analysis(self, org_name: str = "") -> pd.DataFrame:
-        """Get case analysis data"""
+        """Get case analysis data (DB or local CSV fallback)"""
         org_code = self.org_mapping.get(org_name, "")
         collection_name = f"cbircsplit{org_code}"
         
-        try:
-            return await db_manager.get_dataframe(collection_name)
-        except Exception as e:
-            print(f"Error getting case analysis: {e}")
-            return pd.DataFrame()
+        # Try DB first only if enabled
+        df = pd.DataFrame()
+        if self.use_db:
+            try:
+                df = await db_manager.get_dataframe(collection_name)
+            except Exception as e:
+                print(f"Error getting case analysis (db): {e}")
+
+        if df.empty:
+            if org_code:
+                df = self._load_local_csvs(collection_name)
+            else:
+                candidates = [
+                    self._load_local_csvs("cbircsplitjiguan"),
+                    self._load_local_csvs("cbircsplitbenji"),
+                    self._load_local_csvs("cbircsplitfenju"),
+                    self._load_local_csvs("cbircsplit"),
+                ]
+                non_empty = [d for d in candidates if not d.empty]
+                df = pd.concat(non_empty, ignore_index=True) if non_empty else pd.DataFrame()
+        return df
     
     async def get_case_categories(self) -> pd.DataFrame:
-        """Get case categories data"""
-        try:
-            return await db_manager.get_dataframe("cbirccat")
-        except Exception as e:
-            print(f"Error getting case categories: {e}")
-            return pd.DataFrame()
+        """Get case categories data (DB or local CSV fallback)"""
+        # Try DB first only if enabled
+        df = pd.DataFrame()
+        if self.use_db:
+            try:
+                df = await db_manager.get_dataframe("cbirccat")
+            except Exception as e:
+                print(f"Error getting case categories (db): {e}")
+
+        if df.empty:
+            df = self._load_local_csvs("cbirccat")
+            if not df.empty and "id" in df.columns:
+                df = df.drop_duplicates(subset=["id"], keep="last").reset_index(drop=True)
+        return df
     
     async def search_cases(self, search_request: CaseSearchRequest) -> CaseSearchResponse:
         """Search cases based on criteria"""
         try:
-            # Get combined data
-            detail_df = await self.get_case_detail("")
-            analysis_df = await self.get_case_analysis("")
+            # Determine org scope
+            org_name = getattr(search_request, "org_name", "") or ""
+
+            # Get combined data (optionally scoped by organization)
+            detail_df = await self.get_case_detail(org_name)
+            # Fallback: if scoped read is empty, try full dataset
+            if detail_df.empty and org_name:
+                detail_df = await self.get_case_detail("")
+            analysis_df = await self.get_case_analysis(org_name)
             category_df = await self.get_case_categories()
             
             if detail_df.empty:
@@ -178,7 +272,7 @@ class CaseService:
             ("penalty", search_request.penalty_text),
             ("org", search_request.org_text),
             ("industry", search_request.industry),
-            ("province", search_request.province)
+            ("province", search_request.province),
         ]
         
         for column, text in text_filters:
@@ -188,16 +282,41 @@ class CaseService:
                     filtered_df = filtered_df[
                         filtered_df[column].astype(str).str.contains(pattern, case=False, na=False, regex=True)
                     ]
+
+        # Title filter (from app.py 案情经过)
+        if getattr(search_request, "title_text", "") and "标题" in filtered_df.columns:
+            title_pattern = self._split_words(search_request.title_text)
+            if title_pattern:
+                filtered_df = filtered_df[
+                    filtered_df["标题"].astype(str).str.contains(title_pattern, case=False, na=False, regex=True)
+                ]
         
         # Amount filter
         if search_request.min_penalty and "amount" in filtered_df.columns:
             filtered_df = filtered_df[
                 pd.to_numeric(filtered_df["amount"], errors='coerce').fillna(0) >= search_request.min_penalty
             ]
+
+        # General keyword filter across multiple fields
+        if getattr(search_request, "keyword", ""):
+            keyword_pattern = self._split_words(search_request.keyword)
+            if keyword_pattern:
+                candidate_columns = [
+                    "标题", "文号", "内容", "wenhao", "people", "event",
+                    "law", "penalty", "org", "province", "industry", "category"
+                ]
+                existing_columns = [c for c in candidate_columns if c in filtered_df.columns]
+                if existing_columns:
+                    mask = pd.Series(False, index=filtered_df.index)
+                    for col in existing_columns:
+                        mask = mask | filtered_df[col].astype(str).str.contains(keyword_pattern, case=False, na=False, regex=True)
+                    filtered_df = filtered_df[mask]
         
-        # Sort by date descending
-        if "发布日期" in filtered_df.columns:
-            filtered_df = filtered_df.sort_values("发布日期", ascending=False)
+        # Sort by date descending (fallback to id when date not available)
+        if "发布日期" in filtered_df.columns and filtered_df["发布日期"].notna().any():
+            filtered_df = filtered_df.sort_values(["发布日期", "id"], ascending=[False, False])
+        elif "id" in filtered_df.columns:
+            filtered_df = filtered_df.sort_values("id", ascending=False)
         
         # Remove duplicates
         if "id" in filtered_df.columns:

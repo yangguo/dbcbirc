@@ -252,6 +252,76 @@ city2province = {
 }
 
 
+# Normalize various region strings to standard province names used by the map
+def normalize_province_name(name: str) -> str:
+    # Guard against non-string or empty inputs
+    try:
+        region = str(name).strip()
+    except Exception:
+        return "未知省份"
+
+    if not region:
+        return "未知省份"
+
+    # First try explicit exact mapping table
+    if region in city2province:
+        return city2province[region]
+
+    # Handle common province/municipality/autonomous region keywords
+    shorthand_map = {
+        "北京": "北京市",
+        "天津": "天津市",
+        "上海": "上海市",
+        "重庆": "重庆市",
+        "河北": "河北省",
+        "山西": "山西省",
+        "辽宁": "辽宁省",
+        "吉林": "吉林省",
+        "黑龙江": "黑龙江省",
+        "江苏": "江苏省",
+        "浙江": "浙江省",
+        "安徽": "安徽省",
+        "福建": "福建省",
+        "江西": "江西省",
+        "山东": "山东省",
+        "河南": "河南省",
+        "湖北": "湖北省",
+        "湖南": "湖南省",
+        "广东": "广东省",
+        "海南": "海南省",
+        "四川": "四川省",
+        "贵州": "贵州省",
+        "云南": "云南省",
+        "陕西": "陕西省",
+        "甘肃": "甘肃省",
+        "青海": "青海省",
+        "内蒙古": "内蒙古自治区",
+        "广西": "广西壮族自治区",
+        "西藏": "西藏自治区",
+        "宁夏": "宁夏回族自治区",
+        "新疆": "新疆维吾尔自治区",
+    }
+    # If region CONTAINS any of the province keywords, map accordingly
+    for keyword, std_province in shorthand_map.items():
+        if keyword in region:
+            return std_province
+
+    # If looks like a full province name already, return as-is
+    if region.endswith("省") or region.endswith("市") or region.endswith("自治区"):
+        return region
+
+    # Try matching by known city/area keywords from the mapping table
+    # Prefer longer (more specific) keys first to avoid partial mismatches
+    for key in sorted(city2province.keys(), key=len, reverse=True):
+        # Avoid overly generic keys to prevent false positives
+        if key in ("中国",):
+            continue
+        if key and key in region:
+            return city2province[key]
+
+    # Fallback
+    return "未知省份"
+
 # @st.cache(allow_output_mutation=True)
 def get_csvdf(penfolder, beginwith):
     # read parquet file if exists
@@ -1777,8 +1847,8 @@ def count_by_province(city_ls, count_ls):
     province_counts = Counter()
 
     for city, count in zip(city_ls, count_ls):
-        province = city2province[city]
-        if province:
+        province = normalize_province_name(city)
+        if province and province != "未知省份":
             province_counts[province] += count
         else:
             province_counts["未知省份"] += count
@@ -1787,6 +1857,8 @@ def count_by_province(city_ls, count_ls):
     sorted_provinces = sorted(province_counts.items(), key=lambda x: (-x[1], x[0]))
 
     # Use zip for efficient unpacking
+    if not sorted_provinces:
+        return [], []
     provinces, counts = zip(*sorted_provinces)
 
     return list(provinces), list(counts)

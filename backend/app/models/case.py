@@ -1,4 +1,9 @@
 from pydantic import BaseModel, Field
+try:
+    # Pydantic v2
+    from pydantic import ConfigDict  # type: ignore
+except Exception:  # pragma: no cover
+    ConfigDict = dict  # Fallback for type checkers; v1 will ignore model_config
 from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 from enum import Enum
@@ -36,7 +41,8 @@ class CaseDetail(CaseBase):
     category: Optional[str] = Field(None, description="案件类型")
     amount: Optional[float] = Field(None, description="罚款金额")
     province: Optional[str] = Field(None, description="处罚地区")
-    industry: Optional[IndustryType] = Field(None, description="行业类型")
+    # Accept arbitrary industry text to align with CSV (e.g., 银行业/保险业)
+    industry: Optional[str] = Field(None, description="行业类型")
 
 
 class CaseSummary(BaseModel):
@@ -48,8 +54,12 @@ class CaseSummary(BaseModel):
 
 
 class CaseSearchRequest(BaseModel):
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
+    # Support both start_date/end_date and date_start/date_end (from frontend)
+    start_date: Optional[date] = Field(default=None, alias="date_start")
+    end_date: Optional[date] = Field(default=None, alias="date_end")
+
+    # Text fields (aligned with app.py search)
+    title_text: Optional[str] = Field(default="", alias="title")
     wenhao_text: Optional[str] = ""
     people_text: Optional[str] = ""
     event_text: Optional[str] = ""
@@ -57,10 +67,21 @@ class CaseSearchRequest(BaseModel):
     penalty_text: Optional[str] = ""
     org_text: Optional[str] = ""
     industry: Optional[str] = ""
-    min_penalty: Optional[float] = 0
     province: Optional[str] = ""
+
+    # General keyword search across multiple fields
+    keyword: Optional[str] = ""
+
+    # Additional filters
+    min_penalty: Optional[float] = 0
+    org_name: Optional[str] = Field(default="", alias="org_name")
+
+    # Pagination
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=100)
+
+    # Pydantic v2 style config (suppresses deprecation warning)
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class CaseSearchResponse(BaseModel):

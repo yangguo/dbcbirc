@@ -1,14 +1,69 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 export interface CaseSearchRequest {
+  // Pagination
   page?: number
   page_size?: number
+
+  // Org scope
   org_name?: string
-  penalty_type?: string
+
+  // Date filters (support both names)
+  start_date?: string
+  end_date?: string
   date_start?: string
   date_end?: string
+
+  // Text filters
+  title_text?: string
+  wenhao_text?: string
+  people_text?: string
+  event_text?: string
+  law_text?: string
+  penalty_text?: string
+  org_text?: string
+
+  // Other filters
+  industry?: string
+  province?: string
+  min_penalty?: number
+
+  // General keyword
   keyword?: string
+
+  // For backward compatibility
+  penalty_type?: string
+
   [key: string]: any
+}
+
+// Backend response models
+export interface CaseDetail {
+  id: string
+  title: string
+  subtitle: string
+  publish_date: string
+  content: string
+  summary?: string
+  wenhao?: string
+  people?: string
+  event?: string
+  law?: string
+  penalty?: string
+  org?: string
+  penalty_date?: string
+  category?: string
+  amount?: number
+  province?: string
+  industry?: string
+}
+
+export interface CaseSearchResponse {
+  cases: CaseDetail[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
 }
 
 class ApiClient {
@@ -65,8 +120,8 @@ class ApiClient {
   }
 
   // Search Cases
-  async searchCases(searchParams: any) {
-    return this.request('/api/v1/search/', {
+  async searchCases(searchParams: CaseSearchRequest): Promise<CaseSearchResponse> {
+    return this.request<CaseSearchResponse>('/api/v1/search/', {
       method: 'POST',
       body: JSON.stringify(searchParams),
     })
