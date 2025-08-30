@@ -11,7 +11,7 @@ export function AdminDashboard() {
   const { data: systemInfo, isLoading, refetch } = useQuery({
     queryKey: ['system-info'],
     queryFn: () => apiClient.getSystemInfo(),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    // refetchInterval: 30000, // Disabled automatic refresh
   })
 
   const handleRefreshData = async () => {

@@ -50,21 +50,21 @@ export function DataManagement() {
   const { data: activeTasksData } = useQuery({
     queryKey: ['active-tasks'],
     queryFn: () => apiClient.getActiveTasks(),
-    refetchInterval: 3000, // Refresh every 3 seconds
+    // refetchInterval: 3000, // Disabled automatic refresh
   })
 
   // Query for case summary by organization
   const { data: caseSummary, isLoading: summaryLoading } = useQuery({
     queryKey: ['caseSummary', updateForm.orgName],
     queryFn: () => apiClient.getCaseSummaryByOrg(updateForm.orgName),
-    refetchInterval: 5000, // Refresh every 5 seconds
+    // refetchInterval: 5000, // Disabled automatic refresh
   })
 
   // Query for case detail summary by organization
   const { data: caseDetailSummary, isLoading: detailSummaryLoading } = useQuery({
     queryKey: ['caseDetailSummary', updateForm.orgName],
     queryFn: () => apiClient.getCaseDetailSummaryByOrg(updateForm.orgName),
-    refetchInterval: 5000, // Refresh every 5 seconds
+    // refetchInterval: 5000, // Disabled automatic refresh
   })
 
   const updateCasesMutation = useMutation({
@@ -110,7 +110,7 @@ export function DataManagement() {
   const { data: caseDetailsProgress } = useQuery({
     queryKey: ['caseDetailsProgress', updateForm.orgName],
     queryFn: () => apiClient.getCaseDetailsProgress(updateForm.orgName),
-    refetchInterval: 2000, // Refresh every 2 seconds during updates
+    // refetchInterval: 2000, // Disabled automatic refresh
     enabled: updateCaseDetailsMutation.isPending, // Only fetch when updating
   })
 

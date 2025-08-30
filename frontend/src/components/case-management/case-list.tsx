@@ -44,7 +44,7 @@ export function CaseList() {
   const { data: caseData, isLoading, refetch } = useQuery({
     queryKey: ['caseList', searchForm],
     queryFn: () => apiClient.getCaseDetail(searchForm.orgName === 'all' ? undefined : searchForm.orgName),
-    refetchInterval: 30000, // Refresh every 30 seconds
+    // refetchInterval: 30000, // Disabled automatic refresh
   })
 
   const handleSearch = () => {

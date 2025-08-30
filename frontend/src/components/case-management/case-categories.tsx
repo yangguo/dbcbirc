@@ -32,7 +32,7 @@ export function CaseCategories() {
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ['classificationStats'],
     queryFn: () => apiClient.getSystemInfo(), // Using system info as placeholder
-    refetchInterval: 30000,
+    // refetchInterval: 30000, // Disabled automatic refresh
   })
 
   // Mock data for categories

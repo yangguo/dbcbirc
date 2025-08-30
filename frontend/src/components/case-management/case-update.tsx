@@ -61,7 +61,7 @@ export function CaseUpdate() {
   const { data: tasksData, isLoading: tasksLoading } = useQuery({
     queryKey: ['admin-tasks'],
     queryFn: () => apiClient.getTasks(20),
-    refetchInterval: 5000, // Refresh every 5 seconds
+    // refetchInterval: 5000, // Disabled automatic refresh
   })
 
   const updateTasks = (tasksData as any)?.tasks || []

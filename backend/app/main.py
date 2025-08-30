@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from app.api.v1 import cases, search, analytics, admin, classification
+from app.api.v1 import cases, search, analytics, admin, classification, online
 from app.core.config import settings
 from app.core.database import db_manager
 import logging
@@ -51,6 +51,7 @@ app.include_router(search.router, prefix="/api/v1/search", tags=["search"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 app.include_router(classification.router, prefix="/api/v1/classification", tags=["classification"])
+app.include_router(online.router, prefix="/api/v1/online", tags=["online"])
 
 @app.get("/")
 async def root():

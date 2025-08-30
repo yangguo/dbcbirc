@@ -45,7 +45,7 @@ class DatabaseManager:
             if not self._connection_enabled:
                 raise Exception("Database connection is disabled")
             raise Exception("Database not connected")
-        db = self.client[settings.DATABASE_NAME]
+        db = self.client[settings.MONGODB_DB]
         return db[collection_name]
     
     def get_sync_collection(self, collection_name: str):
@@ -54,7 +54,7 @@ class DatabaseManager:
             if not self._connection_enabled:
                 raise Exception("Database connection is disabled")
             raise Exception("Database not connected")
-        db = self.sync_client[settings.DATABASE_NAME]
+        db = self.sync_client[settings.MONGODB_DB]
         return db[collection_name]
         
     async def insert_dataframe(self, df: pd.DataFrame, collection_name: str, batch_size: int = 10000):

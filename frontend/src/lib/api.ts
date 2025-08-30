@@ -391,6 +391,43 @@ class ApiClient {
       }),
     })
   }
+
+  // 案例上线相关API
+  async getCaseOnlineStats() {
+    return this.request('/api/v1/online/stats')
+  }
+
+  async getCaseDiffData() {
+    return this.request('/api/v1/online/diff-data')
+  }
+
+  async deleteCaseData() {
+    return this.request('/api/v1/online/delete', {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    })
+  }
+
+  async updateOnlineCases() {
+    return this.request('/api/v1/online/update', {
+      method: 'POST',
+    })
+  }
+
+  async downloadDiffData(): Promise<Blob> {
+    const response = await fetch(`${this.baseUrl}/api/cases/online/download-diff`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'text/csv',
+      },
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    return response.blob()
+  }
 }
 
 // Create and export a singleton instance
