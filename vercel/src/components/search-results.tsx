@@ -1,8 +1,10 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CaseDetail, CaseSearchResponse } from "@/types"
+import { ChevronDown, ChevronUp } from "lucide-react"
 
 interface SearchResultsProps {
   results: CaseSearchResponse | null
@@ -11,6 +13,17 @@ interface SearchResultsProps {
 }
 
 export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsProps) {
+  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set())
+
+  const toggleExpanded = (index: number) => {
+    const newExpanded = new Set(expandedItems)
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index)
+    } else {
+      newExpanded.add(index)
+    }
+    setExpandedItems(newExpanded)
+  }
   if (isLoading && !results) {
     return (
       <div className="flex justify-center items-center py-8">
@@ -54,14 +67,21 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
       </div>
       
       <div className="grid gap-4">
-        {results.cases.map((caseItem: CaseDetail, index: number) => (
-          <Card key={index} className="hover:shadow-md transition-shadow bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-lg text-foreground">
-                {caseItem.org || caseItem.机构 || '未知组织'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
+        {results.cases.map((caseItem: CaseDetail, index: number) => {
+          const isExpanded = expandedItems.has(index)
+          return (
+            <Card key={index} className="hover:shadow-md transition-shadow bg-card border-border">
+              <CardHeader className="cursor-pointer" onClick={() => toggleExpanded(index)}>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg text-foreground">
+                    {caseItem.org || caseItem.机构 || '未知组织'}
+                  </CardTitle>
+                  <Button variant="ghost" size="sm" className="p-1">
+                    {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
               {(caseItem.penalty_date || caseItem.处罚日期 || caseItem.publish_date || caseItem.发布日期) && (
                 <div className="text-sm text-foreground">
                   <span className="font-medium">案例日期：</span>
@@ -81,28 +101,53 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
               {(caseItem.event || caseItem.违法事实) && (
                 <div className="text-sm text-foreground">
                   <span className="font-medium">违规描述：</span>
-                  <p className="mt-1 text-muted-foreground line-clamp-3">
+                  <p className={`mt-1 text-muted-foreground ${isExpanded ? '' : 'line-clamp-3'}`}>
                     {caseItem.event || caseItem.违法事实}
                   </p>
                 </div>
               )}
               
-              {(caseItem.law || caseItem.法律依据) && (
-                <div className="text-sm text-foreground">
-                  <span className="font-medium">处罚依据：</span>
-                  <p className="mt-1 text-muted-foreground line-clamp-2">
-                    {caseItem.law || caseItem.法律依据}
-                  </p>
-                </div>
-              )}
-              
-              {(caseItem.penalty || caseItem.处罚决定) && (
-                <div className="text-sm text-foreground">
-                  <span className="font-medium">处罚决定：</span>
-                  <p className="mt-1 text-muted-foreground line-clamp-2">
-                    {caseItem.penalty || caseItem.处罚决定}
-                  </p>
-                </div>
+              {isExpanded && (
+                <>
+                  {(caseItem.law || caseItem.法律依据) && (
+                    <div className="text-sm text-foreground">
+                      <span className="font-medium">处罚依据：</span>
+                      <p className="mt-1 text-muted-foreground">
+                        {caseItem.law || caseItem.法律依据}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {(caseItem.penalty || caseItem.处罚决定) && (
+                    <div className="text-sm text-foreground">
+                      <span className="font-medium">处罚决定：</span>
+                      <p className="mt-1 text-muted-foreground">
+                        {caseItem.penalty || caseItem.处罚决定}
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* 显示所有其他可用字段 */}
+                  {Object.entries(caseItem).map(([key, value]) => {
+                    // 跳过已经显示的字段
+                    const skipFields = ['org', '机构', 'penalty_date', '处罚日期', 'publish_date', '发布日期', 
+                                      'amount', '金额', 'event', '违法事实', 'law', '法律依据', 'penalty', '处罚决定',
+                                      'province', '省份', 'industry', '行业']
+                    
+                    if (skipFields.includes(key) || !value || value === '') {
+                      return null
+                    }
+                    
+                    return (
+                      <div key={key} className="text-sm text-foreground">
+                        <span className="font-medium">{key}：</span>
+                        <p className="mt-1 text-muted-foreground">
+                          {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </>
               )}
               
               <div className="flex flex-wrap gap-2 pt-2">
@@ -123,8 +168,9 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
                 )}
               </div>
             </CardContent>
-          </Card>
-        ))}
+            </Card>
+          )
+        })}
       </div>
       
       {results.page < Math.ceil(results.total / results.page_size) && (
