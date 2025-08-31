@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { SearchForm } from "@/components/search-form"
 import { SearchResults } from "@/components/search-results"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { CaseSearchRequest, CaseSearchResponse } from "@/types"
 
 export default function HomePage() {
@@ -57,15 +58,20 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            在线案例搜索系统
-          </h1>
-          <p className="text-gray-600">
-            搜索和浏览监管案例数据库
-          </p>
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground mb-2">
+                在线案例搜索系统
+              </h1>
+              <p className="text-muted-foreground">
+                搜索和浏览监管案例数据库
+              </p>
+            </div>
+            <ThemeToggle />
+          </div>
         </div>
         
         <div className="space-y-8">
