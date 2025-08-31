@@ -1,12 +1,16 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from typing import List, Dict, Any
 from app.services.case_service import case_service
 from app.core.database import db_manager
 from app.core.config import settings
+from app.models.case import CaseSearchRequest, CaseSearchResponse, CaseDetail
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 import logging
 import asyncio
+import re
+import math
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -447,5 +451,292 @@ async def update_online_cases():
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in update_online_cases: {e}")
+            logger.error(f"Error in update_online_cases: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/search", response_model=CaseSearchResponse)
+async def search_online_cases(search_request: CaseSearchRequest):
+    """Search online cases from MongoDB based on criteria"""
+    try:
+        # Check if database connection is enabled
+        if not db_manager._connection_enabled:
+            logger.warning("Database connection is disabled")
+            return CaseSearchResponse(
+                cases=[],
+                total=0,
+                page=search_request.page,
+                page_size=search_request.page_size,
+                total_pages=0
+            )
+        
+        if not db_manager.client:
+            logger.warning("Database not connected")
+            return CaseSearchResponse(
+                cases=[],
+                total=0,
+                page=search_request.page,
+                page_size=search_request.page_size,
+                total_pages=0
+            )
+        
+        # Get online data from MongoDB
+        collection = db_manager.get_collection(settings.MONGODB_COLLECTION)
+        
+        # Build MongoDB query
+        query = {}
+        
+        # Date range filter
+        if search_request.start_date or search_request.end_date:
+            date_filter = {}
+            if search_request.start_date:
+                date_filter["$gte"] = search_request.start_date
+            if search_request.end_date:
+                date_filter["$lte"] = search_request.end_date
+            query["发布日期"] = date_filter
+        
+        # Text search filters
+        if search_request.title_text:
+            query["标题"] = {"$regex": search_request.title_text, "$options": "i"}
+        
+        if search_request.wenhao_text:
+            query["$or"] = [
+                {"文号": {"$regex": search_request.wenhao_text, "$options": "i"}},
+                {"行政处罚决定书文号": {"$regex": search_request.wenhao_text, "$options": "i"}}
+            ]
+        
+        if search_request.people_text:
+            query["被处罚当事人"] = {"$regex": search_request.people_text, "$options": "i"}
+        
+        if search_request.event_text:
+            query["主要违法违规事实"] = {"$regex": search_request.event_text, "$options": "i"}
+        
+        if search_request.law_text:
+            query["行政处罚依据"] = {"$regex": search_request.law_text, "$options": "i"}
+        
+        if search_request.penalty_text:
+            query["行政处罚决定"] = {"$regex": search_request.penalty_text, "$options": "i"}
+        
+        if search_request.org_text:
+            query["作出处罚决定的机关名称"] = {"$regex": search_request.org_text, "$options": "i"}
+        
+        if search_request.industry:
+            query["industry"] = {"$regex": search_request.industry, "$options": "i"}
+        
+        if search_request.province:
+            query["province"] = {"$regex": search_request.province, "$options": "i"}
+        
+        # General keyword search across multiple fields
+        if search_request.keyword:
+            keyword_regex = {"$regex": search_request.keyword, "$options": "i"}
+            query["$or"] = [
+                {"标题": keyword_regex},
+                {"文号": keyword_regex},
+                {"被处罚当事人": keyword_regex},
+                {"主要违法违规事实": keyword_regex},
+                {"行政处罚依据": keyword_regex},
+                {"行政处罚决定": keyword_regex},
+                {"作出处罚决定的机关名称": keyword_regex}
+            ]
+        
+        # Get total count
+        total = await collection.count_documents(query)
+        
+        # Calculate pagination
+        total_pages = math.ceil(total / search_request.page_size)
+        skip = (search_request.page - 1) * search_request.page_size
+        
+        # Execute search with pagination
+        cursor = collection.find(query).skip(skip).limit(search_request.page_size)
+        documents = await cursor.to_list(length=search_request.page_size)
+        
+        # Convert to CaseDetail objects
+        cases = []
+        for doc in documents:
+            # Parse date fields
+            publish_date = doc.get("发布日期")
+            if isinstance(publish_date, str):
+                try:
+                    publish_date = datetime.strptime(publish_date, "%Y-%m-%d").date()
+                except:
+                    publish_date = date.today()
+            elif isinstance(publish_date, datetime):
+                publish_date = publish_date.date()
+            elif not isinstance(publish_date, date):
+                publish_date = date.today()
+            
+            penalty_date = doc.get("作出处罚决定的日期")
+            if isinstance(penalty_date, str):
+                try:
+                    penalty_date = datetime.strptime(penalty_date, "%Y-%m-%d").date()
+                except:
+                    penalty_date = None
+            elif isinstance(penalty_date, datetime):
+                penalty_date = penalty_date.date()
+            elif not isinstance(penalty_date, date):
+                penalty_date = None
+            
+            # Extract penalty amount from penalty decision text
+            amount = None
+            penalty_text = doc.get("行政处罚决定", "")
+            if penalty_text:
+                # Look for monetary amounts in the penalty text
+                amount_match = re.search(r'(\d+(?:\.\d+)?)万?元', penalty_text)
+                if amount_match:
+                    amount_str = amount_match.group(1)
+                    amount = float(amount_str)
+                    if '万' in amount_match.group(0):
+                        amount *= 10000
+            
+            case = CaseDetail(
+                id=str(doc.get("id", doc.get("_id", ""))),
+                title=doc.get("标题", ""),
+                subtitle=doc.get("文号", ""),
+                publish_date=publish_date,
+                content=doc.get("主要违法违规事实", ""),
+                wenhao=doc.get("行政处罚决定书文号", doc.get("文号", "")),
+                people=doc.get("被处罚当事人", ""),
+                event=doc.get("主要违法违规事实", ""),
+                law=doc.get("行政处罚依据", ""),
+                penalty=doc.get("行政处罚决定", ""),
+                org=doc.get("作出处罚决定的机关名称", ""),
+                penalty_date=penalty_date,
+                amount=amount,
+                province=doc.get("province", ""),
+                industry=doc.get("industry", "")
+            )
+            cases.append(case)
+        
+        return CaseSearchResponse(
+            cases=cases,
+            total=total,
+            page=search_request.page,
+            page_size=search_request.page_size,
+            total_pages=total_pages
+        )
+        
+    except Exception as e:
+        logger.error(f"Error searching online cases: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/export")
+async def export_online_cases_csv(
+    start_date: str = None,
+    end_date: str = None,
+    keyword: str = None,
+    title_text: str = None,
+    wenhao_text: str = None,
+    people_text: str = None,
+    event_text: str = None,
+    law_text: str = None,
+    penalty_text: str = None,
+    org_text: str = None,
+    industry: str = None,
+    province: str = None,
+    min_penalty: float = None
+):
+    """Export online cases to CSV format"""
+    try:
+        # Check if database connection is enabled
+        if not db_manager._connection_enabled:
+            logger.warning("Database connection is disabled")
+            raise HTTPException(status_code=503, detail="Database connection is disabled")
+        
+        if not db_manager.client:
+            logger.warning("Database not connected")
+            raise HTTPException(status_code=503, detail="Database not connected")
+        
+        # Get online data from MongoDB
+        collection = db_manager.get_collection(settings.MONGODB_COLLECTION)
+        
+        # Build query from query parameters
+        query = {}
+        
+        # Date range filter
+        if start_date or end_date:
+            date_filter = {}
+            if start_date:
+                date_filter["$gte"] = start_date
+            if end_date:
+                date_filter["$lte"] = end_date
+            query["发布日期"] = date_filter
+        
+        # Text search filters
+        text_filters = []
+        if title_text:
+            text_filters.append({"标题": {"$regex": title_text, "$options": "i"}})
+        if wenhao_text:
+            text_filters.append({"文号": {"$regex": wenhao_text, "$options": "i"}})
+        if people_text:
+            text_filters.append({"被处罚当事人": {"$regex": people_text, "$options": "i"}})
+        if event_text:
+            text_filters.append({"主要违法违规事实": {"$regex": event_text, "$options": "i"}})
+        if law_text:
+            text_filters.append({"行政处罚依据": {"$regex": law_text, "$options": "i"}})
+        if penalty_text:
+            text_filters.append({"行政处罚决定": {"$regex": penalty_text, "$options": "i"}})
+        if org_text:
+            text_filters.append({"作出处罚决定的机关名称": {"$regex": org_text, "$options": "i"}})
+        if industry:
+            text_filters.append({"行业": {"$regex": industry, "$options": "i"}})
+        if province:
+            text_filters.append({"省份": {"$regex": province, "$options": "i"}})
+        
+        if text_filters:
+            query["$and"] = text_filters
+        
+        # General keyword search
+        if keyword:
+            keyword_regex = {"$regex": keyword, "$options": "i"}
+            query["$or"] = [
+                {"标题": keyword_regex},
+                {"文号": keyword_regex},
+                {"被处罚当事人": keyword_regex},
+                {"主要违法违规事实": keyword_regex},
+                {"行政处罚依据": keyword_regex},
+                {"行政处罚决定": keyword_regex},
+                {"作出处罚决定的机关名称": keyword_regex}
+            ]
+        
+        # Get all matching documents
+        cursor = collection.find(query)
+        documents = await cursor.to_list(length=None)
+        
+        # Convert to DataFrame for CSV export
+        if not documents:
+            # Return empty CSV structure
+            df = pd.DataFrame(columns=[
+                "标题", "文号", "发布日期", "被处罚当事人", "主要违法违规事实",
+                "行政处罚依据", "行政处罚决定", "作出处罚决定的机关名称", "作出处罚决定的日期"
+            ])
+        else:
+            df = pd.DataFrame(documents)
+            
+            # Select and reorder columns for export
+            export_columns = [
+                "标题", "文号", "发布日期", "被处罚当事人", "主要违法违规事实",
+                "行政处罚依据", "行政处罚决定", "作出处罚决定的机关名称", "作出处罚决定的日期"
+            ]
+            
+            # Keep only available columns
+            available_columns = [col for col in export_columns if col in df.columns]
+            df = df[available_columns]
+        
+        # Convert to CSV
+        csv_content = df.to_csv(index=False, encoding='utf-8-sig')
+        
+        # Return CSV as response with proper headers
+        filename = f"online_cases_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting online cases: {e}")
         raise HTTPException(status_code=500, detail=str(e))

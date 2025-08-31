@@ -14,7 +14,8 @@ import {
   Zap,
   Tags,
   Database,
-  FolderOpen
+  FolderOpen,
+  Globe
 } from 'lucide-react'
 
 const navigation = [
@@ -31,6 +32,13 @@ const navigation = [
     icon: Search,
     gradient: 'from-green-500 to-teal-600',
     bgGradient: 'from-green-500/10 to-teal-600/10',
+  },
+  {
+    name: '在线案例搜索',
+    href: '/online-search',
+    icon: Globe,
+    gradient: 'from-cyan-500 to-blue-600',
+    bgGradient: 'from-cyan-500/10 to-blue-600/10',
   },
   {
     name: '案例分类',

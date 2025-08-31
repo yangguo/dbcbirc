@@ -423,6 +423,43 @@ class ApiClient {
     
     return response.blob()
   }
+
+  // Online case search methods
+  async searchOnlineCases(searchParams: CaseSearchRequest): Promise<CaseSearchResponse> {
+    return this.request('/api/v1/online/search', {
+      method: 'POST',
+      body: JSON.stringify(searchParams)
+    })
+  }
+
+  async exportOnlineCasesCSV(searchParams?: CaseSearchRequest): Promise<Blob> {
+    let url = `${this.baseUrl}/api/v1/online/export`
+    
+    // If search parameters are provided, add them as query parameters
+    if (searchParams && Object.keys(searchParams).length > 0) {
+      const params = new URLSearchParams()
+      Object.entries(searchParams).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '' && !Number.isNaN(value)) {
+          // Skip NaN values for numbers
+          if (typeof value === 'number' && Number.isNaN(value)) {
+            return
+          }
+          params.append(key, String(value))
+        }
+      })
+      if (params.toString()) {
+        url += `?${params.toString()}`
+      }
+    }
+    
+    const response = await fetch(url)
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    return response.blob()
+  }
 }
 
 // Create and export a singleton instance
