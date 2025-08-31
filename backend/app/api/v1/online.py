@@ -6,9 +6,134 @@ from app.core.config import settings
 import pandas as pd
 from datetime import datetime
 import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+@router.get("/health")
+async def check_online_health():
+    """Check the health of online data connection"""
+    try:
+        if not db_manager._connection_enabled:
+            return {
+                "status": "disabled",
+                "message": "Database connection is disabled",
+                "mongodb_connected": False
+            }
+        
+        if not db_manager.client:
+            return {
+                "status": "disconnected", 
+                "message": "Database client not initialized",
+                "mongodb_connected": False
+            }
+        
+        # Test connection with short timeout
+        try:
+            await asyncio.wait_for(db_manager.client.admin.command('ping'), timeout=5)
+            
+            # Test collection access
+            online_data_list = await get_online_data_with_timeout(timeout=5)
+            
+            return {
+                "status": "healthy",
+                "message": "Database connection is working",
+                "mongodb_connected": True,
+                "online_data_count": len(online_data_list) if online_data_list else 0
+            }
+        except asyncio.TimeoutError:
+            return {
+                "status": "timeout",
+                "message": "Database connection timed out",
+                "mongodb_connected": False
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Database connection error: {str(e)}",
+                "mongodb_connected": False
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in health check: {e}")
+        return {
+            "status": "error",
+            "message": f"Health check failed: {str(e)}",
+            "mongodb_connected": False
+        }
+
+
+async def get_online_data_with_timeout(timeout: int = 10):
+    """Get online data from MongoDB with timeout"""
+    try:
+        if not db_manager._connection_enabled or not db_manager.client:
+            return []
+        
+        # Use async timeout for MongoDB operations
+        online_collection = db_manager.get_collection(settings.MONGODB_COLLECTION)
+        cursor = online_collection.find({})
+        
+        # Convert cursor to list with timeout
+        online_data_list = await asyncio.wait_for(cursor.to_list(length=None), timeout=timeout)
+        return online_data_list
+    except asyncio.TimeoutError:
+        logger.warning(f"MongoDB async operation timed out after {timeout} seconds, trying sync fallback")
+        # Fallback to sync client for better timeout handling
+        sync_result = get_online_ids_sync_with_timeout(timeout=timeout)
+        logger.info(f"Sync fallback returned {len(sync_result)} records")
+        return sync_result
+    except Exception as e:
+        logger.error(f"Error getting online data: {e}")
+        return []
+
+
+def get_online_data_sync_with_timeout(timeout: int = 10):
+    """Get online data from MongoDB using sync client with timeout"""
+    try:
+        if not db_manager._connection_enabled or not db_manager.sync_client:
+            return []
+        
+        # Set socket timeout on the collection level
+        online_collection = db_manager.get_sync_collection(settings.MONGODB_COLLECTION)
+        
+        # Use find with timeout
+        cursor = online_collection.find({}).max_time_ms(timeout * 1000)  # Convert to milliseconds
+        online_data_list = list(cursor)
+        return online_data_list
+    except Exception as e:
+        logger.error(f"Error getting online data with sync client: {e}")
+        return []
+
+
+def get_online_ids_sync_with_timeout(timeout: int = 10) -> List[str]:
+    """Get only online data IDs from MongoDB using sync client with timeout - more efficient for diff calculation"""
+    try:
+        logger.info(f"Starting sync operation with timeout {timeout} seconds")
+        if not db_manager._connection_enabled or not db_manager.sync_client:
+            logger.error("Database connection disabled or sync client not available")
+            return []
+        
+        # Set socket timeout on the collection level
+        online_collection = db_manager.get_sync_collection(settings.MONGODB_COLLECTION)
+        
+        # Only fetch the id field to reduce data transfer and improve performance
+        cursor = online_collection.find({}, {"id": 1, "_id": 0}).max_time_ms(timeout * 1000)
+        
+        import time
+        start_time = time.time()
+        online_data_list = list(cursor)
+        elapsed_time = time.time() - start_time
+        
+        # Extract just the ID strings from the documents
+        online_ids = [doc["id"] for doc in online_data_list if "id" in doc]
+        
+        logger.info(f"Sync operation completed, collected {len(online_ids)} IDs in {elapsed_time:.2f} seconds")
+        return online_ids
+    except Exception as e:
+        logger.error(f"Error getting online IDs with sync client: {e}")
+        return []
 
 
 @router.get("/stats")
@@ -50,20 +175,15 @@ async def get_online_stats():
         
         # 7. 获取在线数据统计 (对应uplink_cbircsum中的online_data)
         online_data = {"count": 0, "unique_ids": 0}
-        if db_manager._connection_enabled and db_manager.client:
-            try:
-                online_collection = db_manager.get_sync_collection(settings.MONGODB_COLLECTION)
-                online_data_cursor = online_collection.find({})
-                online_data_list = list(online_data_cursor)
-                
-                # 匹配原始函数逻辑：使用unique id count作为count
-                unique_count = len(set(doc.get("id") for doc in online_data_list if doc.get("id")))
-                online_data = {
-                    "count": unique_count,
-                    "unique_ids": unique_count
-                }
-            except Exception as e:
-                logger.error(f"Error getting online data stats: {e}")
+        online_data_list = await get_online_data_with_timeout(timeout=20)  # Increased timeout for large dataset
+        
+        if online_data_list:
+            # 匹配原始函数逻辑：使用unique id count作为count
+            unique_count = len(set(doc.get("id") for doc in online_data_list if doc.get("id")))
+            online_data = {
+                "count": unique_count,
+                "unique_ids": unique_count
+            }
         
         # 8. 计算差异数据 (完全按照uplink_cbircsum函数的逻辑)
         diff_data = {"count": 0, "unique_ids": 0}
@@ -74,45 +194,46 @@ async def get_online_stats():
             else:
                 merged_df = analysis_df_dedup.copy()
             
-            if db_manager._connection_enabled and db_manager.client:
-                try:
-                    online_collection = db_manager.get_sync_collection(settings.MONGODB_COLLECTION)
-                    online_data_cursor = online_collection.find({})
-                    online_data_list = list(online_data_cursor)
-                    
-                    # 筛选出未上线的数据 (对应uplink_cbircsum中的diff_data = alldf[~alldf["id"].isin(online_data["id"])])
-                    online_ids = set(doc.get("id") for doc in online_data_list if doc.get("id"))
-                    diff_data_filtered = merged_df[~merged_df["id"].isin(online_ids)]
-                    
-                    # 进一步筛选有违法事实的案例 (对应uplink_cbircsum中的diff_data4 = diff_data3[diff_data3["主要违法违规事实"].notnull()])
-                    # Calculate diff_data by merging analysis and event data, then filtering
-                    diff_data_df = diff_data_filtered
-                    
-                    # Further filter for cases with violation facts (event data) - matching original function logic
-                    # Original function filters: diff_data4 = diff_data3[diff_data3["主要违法违规事实"].notnull()]
-                    if "event" in diff_data_df.columns:
-                        diff_data_with_events = diff_data_df[diff_data_df["event"].notna() & (diff_data_df["event"] != "")]
-                    else:
-                        # 如果没有event字段，使用所有未上线的数据
-                        diff_data_with_events = diff_data_df
-                    
-                    diff_data = {
-                        "count": len(diff_data_with_events),
-                        "unique_ids": diff_data_with_events["id"].nunique() if not diff_data_with_events.empty else 0
-                    }
-                except Exception as e:
-                    logger.error(f"Error calculating diff data stats: {e}")
-                    # If can't access online data, all local data is diff
-                    diff_data = {
-                        "count": len(merged_df),
-                        "unique_ids": merged_df["id"].nunique() if not merged_df.empty else 0
-                    }
-            else:
-                # If database not connected, all local data is diff
+            # Get online data with timeout - try to get IDs only for better performance
+            online_data_list = await get_online_data_with_timeout(timeout=20)  # Increased timeout
+            
+            if online_data_list:
+                # 筛选出未上线的数据 (对应uplink_cbircsum中的diff_data = alldf[~alldf["id"].isin(online_data["id"])])
+                online_ids = set(doc.get("id") for doc in online_data_list if doc.get("id"))
+                diff_data_filtered = merged_df[~merged_df["id"].isin(online_ids)]
+                
+                # 进一步筛选有违法事实的案例 (对应uplink_cbircsum中的diff_data4 = diff_data3[diff_data3["主要违法违规事实"].notnull()])
+                # Calculate diff_data by merging analysis and event data, then filtering
+                diff_data_df = diff_data_filtered
+                
+                # Further filter for cases with violation facts (event data) - matching original function logic
+                # Original function filters: diff_data4 = diff_data3[diff_data3["主要违法违规事实"].notnull()]
+                if "event" in diff_data_df.columns:
+                    diff_data_with_events = diff_data_df[diff_data_df["event"].notna() & (diff_data_df["event"] != "")]
+                else:
+                    # 如果没有event字段，使用所有未上线的数据
+                    diff_data_with_events = diff_data_df
+                
                 diff_data = {
-                    "count": len(merged_df),
-                    "unique_ids": merged_df["id"].nunique() if not merged_df.empty else 0
+                    "count": len(diff_data_with_events),
+                    "unique_ids": diff_data_with_events["id"].nunique() if not diff_data_with_events.empty else 0
                 }
+                
+                logger.info(f"Diff calculation: Total merged: {len(merged_df)}, Online IDs: {len(online_ids)}, Filtered: {len(diff_data_filtered)}, With events: {len(diff_data_with_events)}")
+            else:
+                # If can't access online data due to timeout or error, use a conservative estimate
+                # Filter for cases with violation facts first
+                if "event" in merged_df.columns:
+                    diff_data_with_events = merged_df[merged_df["event"].notna() & (merged_df["event"] != "")]
+                else:
+                    diff_data_with_events = merged_df
+                
+                diff_data = {
+                    "count": len(diff_data_with_events),
+                    "unique_ids": diff_data_with_events["id"].nunique() if not diff_data_with_events.empty else 0
+                }
+                
+                logger.warning(f"Could not access online data for diff calculation, using all local data with events: {len(diff_data_with_events)}")
         
         result = {
             "analysis_data": analysis_data,
@@ -155,20 +276,17 @@ async def get_case_diff_data():
         if not analysis_df.empty:
             merged_df = pd.merge(merged_df, analysis_df, on="id", how="left")
         
-        # Get online data from MongoDB
-        try:
-            online_collection = db_manager.get_sync_collection("cbircanalysis")
-            online_cursor = online_collection.find({})
-            online_data = pd.DataFrame(list(online_cursor))
-            
+        # Get online data from MongoDB with timeout
+        online_data_list = await get_online_data_with_timeout(timeout=20)
+        
+        if online_data_list:
+            online_data = pd.DataFrame(online_data_list)
             # Get different data (cases not in online data)
             if not online_data.empty:
                 diff_data_df = merged_df[~merged_df["id"].isin(online_data["id"])]
             else:
                 diff_data_df = merged_df
-                
-        except Exception as e:
-            logger.error(f"Error accessing online data: {e}")
+        else:
             # If can't access online data, return all local data as diff
             diff_data_df = merged_df
         
@@ -232,16 +350,20 @@ async def update_online_cases():
             merged_df = pd.merge(merged_df, analysis_df, on="id", how="left")
         
         try:
-            collection = db_manager.get_sync_collection("cbircanalysis")
+            collection = db_manager.get_collection("cbircanalysis")
             
-            # Get online data to find differences
-            online_cursor = collection.find({})
-            online_data = pd.DataFrame(list(online_cursor))
+            # Get online data to find differences with timeout
+            online_data_list = await get_online_data_with_timeout(timeout=25)
             
-            # Get different data (cases not in online data)
-            if not online_data.empty:
-                diff_data_df = merged_df[~merged_df["id"].isin(online_data["id"])]
+            if online_data_list:
+                online_data = pd.DataFrame(online_data_list)
+                # Get different data (cases not in online data)
+                if not online_data.empty:
+                    diff_data_df = merged_df[~merged_df["id"].isin(online_data["id"])]
+                else:
+                    diff_data_df = merged_df
             else:
+                # If can't access online data, treat all data as new
                 diff_data_df = merged_df
             
             # Filter out rows with null main violation facts
@@ -250,8 +372,35 @@ async def update_online_cases():
             # Remove duplicates by id
             diff_data_df = diff_data_df.drop_duplicates(subset=["id"])
             
+            # Select and rename columns to match MongoDB structure (following dbcbirc.py uplink_cbircsum logic)
+            required_columns = [
+                "标题", "文号", "发布日期", "id", "wenhao", "people", "event", "law", "penalty", "org", "date"
+            ]
+            
+            # Filter to only include required columns that exist
+            available_columns = [col for col in required_columns if col in diff_data_df.columns]
+            diff_data_selected = diff_data_df[available_columns].copy()
+            
+            # Rename columns to Chinese field names for MongoDB
+            column_mapping = {
+                "wenhao": "行政处罚决定书文号",
+                "people": "被处罚当事人", 
+                "event": "主要违法违规事实",
+                "law": "行政处罚依据",
+                "penalty": "行政处罚决定",
+                "org": "作出处罚决定的机关名称",
+                "date": "作出处罚决定的日期"
+            }
+            
+            # Apply column renaming
+            diff_data_renamed = diff_data_selected.rename(columns=column_mapping)
+            
+            # Convert date columns to datetime if they exist
+            if "发布日期" in diff_data_renamed.columns:
+                diff_data_renamed["发布日期"] = pd.to_datetime(diff_data_renamed["发布日期"], errors='coerce')
+            
             # Fill NaN values
-            diff_data_df = diff_data_df.fillna("")
+            diff_data_df = diff_data_renamed.fillna("")
             
             if diff_data_df.empty:
                 return {
@@ -261,15 +410,26 @@ async def update_online_cases():
                     "updated_count": 0
                 }
             
-            # Convert to records and insert in batches
+            # Convert to records and insert in batches with timeout
             records = diff_data_df.to_dict("records")
-            batch_size = 10000
+            batch_size = 1000  # Reduced batch size for better timeout handling
             total_inserted = 0
             
             for i in range(0, len(records), batch_size):
                 batch = records[i:i + batch_size]
-                result = collection.insert_many(batch)
-                total_inserted += len(result.inserted_ids)
+                try:
+                    # Use async insert with timeout
+                    result = await asyncio.wait_for(
+                        collection.insert_many(batch), 
+                        timeout=30  # 30 seconds timeout for batch insert
+                    )
+                    total_inserted += len(result.inserted_ids)
+                except asyncio.TimeoutError:
+                    logger.error(f"Timeout inserting batch {i//batch_size + 1}")
+                    raise HTTPException(status_code=504, detail=f"Database operation timed out during batch insert")
+                except Exception as e:
+                    logger.error(f"Error inserting batch {i//batch_size + 1}: {e}")
+                    raise HTTPException(status_code=500, detail=f"Database error during batch insert: {str(e)}")
             
             logger.info(f"Inserted {total_inserted} new cases to cbircanalysis collection")
             

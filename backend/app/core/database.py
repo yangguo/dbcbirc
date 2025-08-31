@@ -25,12 +25,28 @@ class DatabaseManager:
             print("Database connection disabled - skipping connection")
             return
         try:
-            self.client = AsyncIOMotorClient(settings.MONGO_DB_URL)
-            self.sync_client = MongoClient(settings.MONGO_DB_URL)
+            # Configure connection with proper timeouts and connection pooling
+            connection_options = {
+                'connectTimeoutMS': 10000,  # 10 seconds to establish connection
+                'serverSelectionTimeoutMS': 10000,  # 10 seconds to select server
+                'socketTimeoutMS': 20000,  # 20 seconds for socket operations
+                'maxPoolSize': 10,  # Maximum number of connections in pool
+                'retryWrites': True,
+                'w': 'majority'
+            }
+            
+            self.client = AsyncIOMotorClient(settings.MONGO_DB_URL, **connection_options)
+            self.sync_client = MongoClient(settings.MONGO_DB_URL, **connection_options)
+            
+            # Test the connection
+            await self.client.admin.command('ping')
             print("Database connection established successfully")
         except Exception as e:
             print(f"Failed to connect to database: {e}")
             print("Application will continue without database connection")
+            # Set clients to None if connection fails
+            self.client = None
+            self.sync_client = None
         
     async def close_db(self):
         """Close database connection"""

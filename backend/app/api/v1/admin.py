@@ -557,6 +557,40 @@ async def refresh_data():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/reconnect-database")
+async def reconnect_database():
+    """Reconnect to MongoDB database"""
+    try:
+        # Close existing connections if any
+        await db_manager.close_db()
+        
+        # Attempt to reconnect
+        await db_manager.connect_db()
+        
+        # Test the connection
+        if db_manager.client:
+            await db_manager.client.admin.command('ping')
+            return {
+                "message": "Database reconnection successful",
+                "status": "connected",
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "message": "Database reconnection failed - client not initialized",
+                "status": "disconnected",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+    except Exception as e:
+        logger.error(f"Database reconnection failed: {e}")
+        return {
+            "message": f"Database reconnection failed: {str(e)}",
+            "status": "error",
+            "timestamp": datetime.now().isoformat()
+        }
+
+
 @router.get("/system-info")
 async def get_system_info():
     """Get system information"""
