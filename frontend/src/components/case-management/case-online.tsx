@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/components/ui/use-toast'
 import { apiClient } from '@/lib/api'
-import { RefreshCw, Download, Clock, AlertCircle, Database, Globe, Upload, Trash2, Tags } from 'lucide-react'
+import { RefreshCw, Download, Clock, AlertCircle, Database, Globe, Upload, Tags } from 'lucide-react'
 // import { Alert, AlertDescription } from '@/components/ui/alert' // Temporarily disabled
 
 interface OnlineStats {
@@ -73,30 +73,7 @@ export function CaseOnline() {
     enabled: showDiffData,
   })
 
-  // Delete case data
-  const deleteCaseDataMutation = useMutation({
-    mutationFn: () => apiClient.deleteCaseData(),
-    onMutate: () => {
-      setIsProcessing(true)
-    },
-    onSuccess: () => {
-      toast({
-        title: 'Case data deleted successfully',
-        description: 'Online case data has been successfully deleted',
-      })
-      refetchStats()
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Failed to delete case data',
-        description: error.message || 'An error occurred while deleting case data',
-        variant: 'destructive',
-      })
-    },
-    onSettled: () => {
-      setIsProcessing(false)
-    },
-  })
+
 
   // Update online cases
   const updateOnlineCasesMutation = useMutation({
@@ -154,11 +131,7 @@ export function CaseOnline() {
     },
   })
 
-  const handleDeleteCaseData = () => {
-    if (window.confirm('确定要删除所有在线案例数据吗？此操作无法撤销。')) {
-      deleteCaseDataMutation.mutate()
-    }
-  }
+
 
   const handleUpdateOnlineCases = () => {
     if (window.confirm('确定要上传差异数据吗？')) {
@@ -311,15 +284,7 @@ export function CaseOnline() {
               更新在线案例
             </Button>
             
-            <Button
-              onClick={handleDeleteCaseData}
-              disabled={isProcessing || onlineStats?.online_data?.count === 0}
-              variant="destructive"
-              size="sm"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              删除案例数据
-            </Button>
+
           </div>
         </CardContent>
       </Card>
@@ -352,7 +317,7 @@ export function CaseOnline() {
                 </TableHeader>
                 <TableBody>
                   {Array.isArray(diffData) && diffData.length > 0 ? diffData.slice(0, 100).map((item, index) => (
-                    <TableRow key={item.id || index}>
+                    <TableRow key={`${item.id}-${index}`}>
                       <TableCell className="max-w-xs truncate" title={item.title}>
                         {item.title}
                       </TableCell>

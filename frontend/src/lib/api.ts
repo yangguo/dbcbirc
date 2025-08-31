@@ -401,12 +401,7 @@ class ApiClient {
     return this.request('/api/v1/online/diff-data')
   }
 
-  async deleteCaseData() {
-    return this.request('/api/v1/online/delete', {
-      method: 'POST',
-      body: JSON.stringify({ confirm: true }),
-    })
-  }
+
 
   async updateOnlineCases() {
     return this.request('/api/v1/online/update', {

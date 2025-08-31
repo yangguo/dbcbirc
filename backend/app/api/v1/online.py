@@ -25,27 +25,27 @@ async def get_online_stats():
         # 去重处理
         analysis_df_dedup = analysis_df.drop_duplicates(subset=["id"]) if not analysis_df.empty else pd.DataFrame()
         
-        # 3. 获取分类数据 (对应uplink_cbircsum中的amountdf)
-        # 注：这里使用detail_df作为分类数据的基础，因为get_cbirccat在原函数中也是基于案例数据
-        amount_df = detail_df.copy() if not detail_df.empty else pd.DataFrame()
-        amount_df_dedup = amount_df.drop_duplicates(subset=["id"]) if not amount_df.empty else pd.DataFrame()
+        # 3. 获取分类数据 (对应uplink_cbircsum中的amountdf，通过get_cbirccat获取)
+        category_df = await case_service.get_case_categories()
+        # 去重处理
+        category_df_dedup = category_df.drop_duplicates(subset=["id"]) if not category_df.empty else pd.DataFrame()
         
-        # 4. 计算事件数据统计 (基于去重前的数据以匹配原始函数)
+        # 4. 计算事件数据统计 (使用去重后的数据避免冗余统计)
         event_data = {
-            "count": len(detail_df) if not detail_df.empty else 0,
-            "unique_ids": detail_df["id"].nunique() if not detail_df.empty and "id" in detail_df.columns else 0
+            "count": len(detail_df_dedup) if not detail_df_dedup.empty else 0,
+            "unique_ids": detail_df_dedup["id"].nunique() if not detail_df_dedup.empty and "id" in detail_df_dedup.columns else 0
         }
         
-        # 5. 计算分析数据统计 (基于去重前的数据以匹配原始函数)
+        # 5. 计算分析数据统计 (使用去重后的数据避免冗余统计)
         analysis_data = {
-            "count": len(analysis_df) if not analysis_df.empty else 0,
-            "unique_ids": analysis_df["id"].nunique() if not analysis_df.empty and "id" in analysis_df.columns else 0
+            "count": len(analysis_df_dedup) if not analysis_df_dedup.empty else 0,
+            "unique_ids": analysis_df_dedup["id"].nunique() if not analysis_df_dedup.empty and "id" in analysis_df_dedup.columns else 0
         }
         
-        # 6. 计算分类数据统计 (基于去重前的数据以匹配原始函数)
+        # 6. 计算分类数据统计 (对应uplink_cbircsum中的amountdf)
         amount_data = {
-            "count": len(amount_df) if not amount_df.empty else 0,
-            "unique_ids": amount_df["id"].nunique() if not amount_df.empty and "id" in amount_df.columns else 0
+            "count": len(category_df) if not category_df.empty else 0,
+            "unique_ids": category_df["id"].nunique() if not category_df.empty and "id" in category_df.columns else 0
         }
         
         # 7. 获取在线数据统计 (对应uplink_cbircsum中的online_data)
@@ -198,51 +198,6 @@ async def get_case_diff_data():
         
     except Exception as e:
         logger.error(f"Error in get_case_diff_data: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.delete("/delete")
-async def delete_case_data():
-    """Delete case data from MongoDB collection"""
-    try:
-        # Check if database connection is enabled
-        if not db_manager._connection_enabled:
-            logger.warning("Database connection is disabled")
-            raise HTTPException(status_code=503, detail="Database connection is disabled")
-        
-        if not db_manager.client:
-            logger.warning("Database not connected")
-            raise HTTPException(status_code=503, detail="Database not connected")
-        
-        # Delete data from MongoDB collection
-        try:
-            collection = db_manager.get_sync_collection("cbircanalysis")
-            
-            # Get count before deletion
-            count_before = collection.count_documents({})
-            
-            # Delete all documents
-            result = collection.delete_many({})
-            deleted_count = result.deleted_count
-            
-            logger.info(f"Deleted {deleted_count} documents from cbircanalysis collection")
-            
-            return {
-                "message": "Case data deletion completed successfully",
-                "timestamp": datetime.now().isoformat(),
-                "status": "success",
-                "deleted_count": deleted_count,
-                "count_before": count_before
-            }
-            
-        except Exception as e:
-            logger.error(f"Error deleting data from MongoDB: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to delete data: {str(e)}")
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in delete_case_data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
