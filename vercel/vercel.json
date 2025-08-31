@@ -1,10 +1,6 @@
 {
   "version": 2,
-  "env": {
-    "MONGODB_URI": "@mongodb-uri",
-    "MONGODB_DB": "@mongodb-db",
-    "MONGODB_COLLECTION": "@mongodb-collection"
-  },
+
   "functions": {
     "src/app/api/**/*.ts": {
       "maxDuration": 30
