@@ -38,7 +38,7 @@ export function ThemeProvider({
     if (storedTheme) {
       setTheme(storedTheme)
     }
-  }, [])
+  }, [storageKey])
 
   useEffect(() => {
     if (!mounted) return

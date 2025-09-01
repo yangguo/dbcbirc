@@ -5,9 +5,7 @@ const nextConfig = {
     MONGODB_DB: process.env.MONGODB_DB || 'cbirc',
     MONGODB_COLLECTION: process.env.MONGODB_COLLECTION || 'cases',
   },
-  experimental: {
-    serverComponentsExternalPackages: ['mongodb']
-  },
+  serverExternalPackages: ['mongodb'],
   // Vercel deployment optimization
   output: 'standalone',
 }

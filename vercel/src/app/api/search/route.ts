@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
       }
       
       // Add all other fields from the original document
-      const result = { ...baseCase }
+      const result: any = { ...baseCase }
       Object.keys(doc).forEach(key => {
         if (key !== '_id' && !(key in result)) {
           result[key] = doc[key]
