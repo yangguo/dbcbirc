@@ -128,9 +128,9 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
           (caseItem.主要违法违规事实 || '').replace(/\t/g, ' '),
           (caseItem.行政处罚依据 || '').replace(/\t/g, ' '),
           (caseItem.行政处罚决定 || '').replace(/\t/g, ' '),
-          (caseItem.省份 || caseItem.province || '').replace(/\t/g, ' '),
-          (caseItem.行业 || caseItem.industry || '').replace(/\t/g, ' '),
-          (caseItem.分类 || caseItem.category || '').replace(/\t/g, ' ')
+          (caseItem.省份 || '').replace(/\t/g, ' '),
+          (caseItem.行业 || '').replace(/\t/g, ' '),
+          (caseItem.分类 || '').replace(/\t/g, ' ')
         ].join('\t'))
       ].join('\n')
       
