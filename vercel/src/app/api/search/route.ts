@@ -12,16 +12,63 @@ export async function POST(request: NextRequest) {
     // Build MongoDB query
     const query: any = {}
     
-    // Date range filter
+    // Date range filter - support multiple date fields and formats
     if (searchParams.start_date || searchParams.end_date) {
-      const dateFilter: any = {}
-      if (searchParams.start_date) {
-        dateFilter.$gte = searchParams.start_date
+      const dateConditions: any[] = []
+      
+      // Create date filters for both Date objects and string formats
+      const createDateFilter = (startDateStr?: string, endDateStr?: string) => {
+        const filter: any = {}
+        
+        if (startDateStr) {
+          const startDate = new Date(startDateStr)
+          filter.$gte = startDate
+        }
+        
+        if (endDateStr) {
+          const endDate = new Date(endDateStr)
+          endDate.setHours(23, 59, 59, 999)
+          filter.$lte = endDate
+        }
+        
+        return filter
       }
-      if (searchParams.end_date) {
-        dateFilter.$lte = searchParams.end_date
+      
+      const createStringDateFilter = (startDateStr?: string, endDateStr?: string) => {
+        const filter: any = {}
+        
+        if (startDateStr) {
+          filter.$gte = startDateStr
+        }
+        
+        if (endDateStr) {
+          filter.$lte = endDateStr
+        }
+        
+        return filter
       }
-      query['发布日期'] = dateFilter
+      
+      const dateFilter = createDateFilter(searchParams.start_date, searchParams.end_date)
+      const stringDateFilter = createStringDateFilter(searchParams.start_date, searchParams.end_date)
+      
+      // Search only in publish date fields with both Date and string formats
+      const dateFieldQueries = [
+        { '发布日期': dateFilter },
+        { '发布日期': stringDateFilter }
+      ]
+      
+      const dateQuery = { $or: dateFieldQueries }
+      
+      // If there's already an $or query (from keyword search), combine them
+      if (query.$or && query.$or.length > 0) {
+        query.$and = [
+          { $or: query.$or },
+          dateQuery
+        ]
+        delete query.$or
+      } else {
+        query.$or = dateQuery.$or
+      }
     }
     
     // Text search filters
@@ -31,7 +78,6 @@ export async function POST(request: NextRequest) {
       { field: '主要违法违规事实', param: searchParams.event_text },
       { field: '行政处罚依据', param: searchParams.law_text },
       { field: '行政处罚决定', param: searchParams.penalty_text },
-      { field: '作出处罚决定的机关名称', param: searchParams.org_text },
       { field: '行业', param: searchParams.industry },
       { field: '省份', param: searchParams.province },
       { field: '标题', param: searchParams.title_text },
@@ -65,16 +111,32 @@ export async function POST(request: NextRequest) {
     // General keyword search
     if (searchParams.keyword) {
       const keywordRegex = new RegExp(searchParams.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
-      query.$or = [
-        { '标题': keywordRegex },
-        { '文号': keywordRegex },
-        { '行政处罚决定书文号': keywordRegex },
-        { '被处罚当事人': keywordRegex },
-        { '主要违法违规事实': keywordRegex },
-        { '行政处罚依据': keywordRegex },
-        { '行政处罚决定': keywordRegex },
-        { '作出处罚决定的机关名称': keywordRegex }
-      ]
+      const keywordQuery = {
+        $or: [
+          { '标题': keywordRegex },
+          { '文号': keywordRegex },
+          { '行政处罚决定书文号': keywordRegex },
+          { '被处罚当事人': keywordRegex },
+          { '主要违法违规事实': keywordRegex },
+          { '行政处罚依据': keywordRegex },
+          { '行政处罚决定': keywordRegex },
+          { '作出处罚决定的机关名称': keywordRegex }
+        ]
+      }
+      
+      // If there's already an $and query (from date filter), add to it
+      if (query.$and) {
+        query.$and.push(keywordQuery)
+      } else if (query.$or) {
+        // If there's already an $or query (from date filter), combine them
+        query.$and = [
+          { $or: query.$or },
+          keywordQuery
+        ]
+        delete query.$or
+      } else {
+        query.$or = keywordQuery.$or
+      }
     }
     
     // Pagination
@@ -93,24 +155,37 @@ export async function POST(request: NextRequest) {
     ])
     
     // Transform MongoDB documents to match frontend interface
-    const transformedCases = cases.map((doc: any) => ({
-      id: doc._id?.toString() || '',
-      title: doc['标题'] || doc.title || '',
-      subtitle: doc['副标题'] || doc.subtitle || '',
-      publish_date: doc['发布日期'] || doc.publish_date || '',
-      content: doc['内容'] || doc.content || '',
-      wenhao: doc['行政处罚决定书文号'] || doc['文号'] || doc.wenhao || '',
-      people: doc['被处罚当事人'] || doc['当事人'] || doc.people || '',
-      event: doc['主要违法违规事实'] || doc['违法事实'] || doc.event || '',
-      law: doc['行政处罚依据'] || doc['法律依据'] || doc.law || '',
-      penalty: doc['行政处罚决定'] || doc['处罚决定'] || doc.penalty || '',
-      org: doc['作出处罚决定的机关名称'] || doc['机构'] || doc.org || '',
-      penalty_date: doc['作出处罚决定的日期'] || doc['处罚日期'] || doc.penalty_date || '',
-      category: doc['分类'] || doc.category || '',
-      amount: doc['金额'] || doc.amount || 0,
-      province: doc['省份'] || doc.province || '',
-      industry: doc['行业'] || doc.industry || ''
-    }))
+    const transformedCases = cases.map((doc: any) => {
+      // Create a base object with known fields
+      const baseCase = {
+        id: doc._id?.toString() || '',
+        title: doc['标题'] || doc.title || '',
+        subtitle: doc['副标题'] || doc.subtitle || '',
+        publish_date: doc['发布日期'] || doc.publish_date || '',
+        content: doc['内容'] || doc.content || '',
+        wenhao: doc['行政处罚决定书文号'] || doc['文号'] || doc.wenhao || '',
+        people: doc['被处罚当事人'] || doc['当事人'] || doc.people || '',
+        event: doc['主要违法违规事实'] || doc['违法事实'] || doc.event || '',
+        law: doc['行政处罚依据'] || doc['法律依据'] || doc.law || '',
+        penalty: doc['行政处罚决定'] || doc['处罚决定'] || doc.penalty || '',
+        org: doc['作出处罚决定的机关名称'] || doc['机构'] || doc.org || '',
+        penalty_date: doc['作出处罚决定的日期'] || doc['处罚日期'] || doc.penalty_date || '',
+        category: doc['分类'] || doc.category || '',
+        amount: doc['金额'] || doc.amount || 0,
+        province: doc['省份'] || doc.province || '',
+        industry: doc['行业'] || doc.industry || ''
+      }
+      
+      // Add all other fields from the original document
+      const result = { ...baseCase }
+      Object.keys(doc).forEach(key => {
+        if (key !== '_id' && !(key in result)) {
+          result[key] = doc[key]
+        }
+      })
+      
+      return result
+    })
     
     const totalPages = Math.ceil(total / pageSize)
     

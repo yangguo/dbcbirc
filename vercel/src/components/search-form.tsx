@@ -48,7 +48,7 @@ export function SearchForm({ onSearch, isLoading = false }: SearchFormProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="start_date" className="text-foreground">开始日期</Label>
+              <Label htmlFor="start_date" className="text-foreground">发布开始日期</Label>
               <Input
                 id="start_date"
                 type="date"
@@ -59,7 +59,7 @@ export function SearchForm({ onSearch, isLoading = false }: SearchFormProps) {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="end_date" className="text-foreground">结束日期</Label>
+              <Label htmlFor="end_date" className="text-foreground">发布结束日期</Label>
               <Input
                 id="end_date"
                 type="date"
@@ -70,7 +70,7 @@ export function SearchForm({ onSearch, isLoading = false }: SearchFormProps) {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="title_text" className="text-foreground">标题搜索</Label>
+              <Label htmlFor="title_text" className="text-foreground">标题</Label>
               <Input
                 id="title_text"
                 type="text"
@@ -82,11 +82,11 @@ export function SearchForm({ onSearch, isLoading = false }: SearchFormProps) {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="org_name" className="text-foreground">组织名称</Label>
+              <Label htmlFor="org_name" className="text-foreground">处罚机关</Label>
               <Input
                 id="org_name"
                 type="text"
-                placeholder="输入组织名称"
+                placeholder="输入处罚机关名称"
                 value={formData.org_name || ''}
                 onChange={(e) => handleInputChange('org_name', e.target.value)}
                 className="bg-background border-input text-foreground placeholder:text-muted-foreground"
@@ -101,6 +101,92 @@ export function SearchForm({ onSearch, isLoading = false }: SearchFormProps) {
                 placeholder="输入最低金额"
                 value={formData.min_penalty || ''}
                 onChange={(e) => handleInputChange('min_penalty', parseFloat(e.target.value) || 0)}
+                className="bg-background border-input text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="wenhao_text" className="text-foreground">行政处罚决定书文号</Label>
+              <Input
+                id="wenhao_text"
+                type="text"
+                placeholder="输入行政处罚决定书文号"
+                value={formData.wenhao_text || ''}
+                onChange={(e) => handleInputChange('wenhao_text', e.target.value)}
+                className="bg-background border-input text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="people_text" className="text-foreground">被处罚当事人</Label>
+              <Input
+                id="people_text"
+                type="text"
+                placeholder="输入被处罚当事人"
+                value={formData.people_text || ''}
+                onChange={(e) => handleInputChange('people_text', e.target.value)}
+                className="bg-background border-input text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="event_text" className="text-foreground">主要违法违规事实</Label>
+              <Input
+                id="event_text"
+                type="text"
+                placeholder="输入主要违法违规事实"
+                value={formData.event_text || ''}
+                onChange={(e) => handleInputChange('event_text', e.target.value)}
+                className="bg-background border-input text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="law_text" className="text-foreground">行政处罚依据</Label>
+              <Input
+                id="law_text"
+                type="text"
+                placeholder="输入行政处罚依据"
+                value={formData.law_text || ''}
+                onChange={(e) => handleInputChange('law_text', e.target.value)}
+                className="bg-background border-input text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="penalty_text" className="text-foreground">行政处罚决定</Label>
+              <Input
+                id="penalty_text"
+                type="text"
+                placeholder="输入行政处罚决定"
+                value={formData.penalty_text || ''}
+                onChange={(e) => handleInputChange('penalty_text', e.target.value)}
+                className="bg-background border-input text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            
+
+            
+            <div className="space-y-2">
+              <Label htmlFor="industry" className="text-foreground">行业</Label>
+              <Input
+                id="industry"
+                type="text"
+                placeholder="输入行业关键词"
+                value={formData.industry || ''}
+                onChange={(e) => handleInputChange('industry', e.target.value)}
+                className="bg-background border-input text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="province" className="text-foreground">省份</Label>
+              <Input
+                id="province"
+                type="text"
+                placeholder="输入省份关键词"
+                value={formData.province || ''}
+                onChange={(e) => handleInputChange('province', e.target.value)}
                 className="bg-background border-input text-foreground placeholder:text-muted-foreground"
               />
             </div>
