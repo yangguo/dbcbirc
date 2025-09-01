@@ -394,26 +394,22 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
               
                 {/* 标签区域 */}
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-                  {(caseItem.province || caseItem.省份) && (
+                  {caseItem.省份 && (
                     <span className="inline-flex items-center bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded-full">
-                      📍 {caseItem.province || caseItem.省份}
+                      📍 {caseItem.省份}
                     </span>
                   )}
-                  {(caseItem.industry || caseItem.行业) && (
+                  {caseItem.行业 && (
                     <span className="inline-flex items-center bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs px-2 py-1 rounded-full">
-                      🏢 {caseItem.industry || caseItem.行业}
+                      🏢 {caseItem.行业}
                     </span>
                   )}
-                  {(caseItem.category || caseItem.分类) && (
+                  {caseItem.分类 && (
                     <span className="inline-flex items-center bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 text-xs px-2 py-1 rounded-full">
-                      📂 {caseItem.category || caseItem.分类}
+                      📂 {caseItem.分类}
                     </span>
                   )}
-                  {(caseItem.penalty_type) && (
-                    <span className="inline-flex items-center bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 text-xs px-2 py-1 rounded-full">
-                      ⚖️ {caseItem.penalty_type}
-                    </span>
-                  )}
+
                   <span className="inline-flex items-center bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs px-2 py-1 rounded-full">
                     {isExpanded ? '点击收起' : '点击展开详情'}
                   </span>
