@@ -56,9 +56,9 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
           `"${(caseItem.主要违法违规事实 || '').replace(/"/g, '""')}"`,
           `"${(caseItem.行政处罚依据 || '').replace(/"/g, '""')}"`,
           `"${(caseItem.行政处罚决定 || '').replace(/"/g, '""')}"`,
-          `"${(caseItem.省份 || caseItem.province || '').replace(/"/g, '""')}"`,
-          `"${(caseItem.行业 || caseItem.industry || '').replace(/"/g, '""')}"`,
-          `"${(caseItem.分类 || caseItem.category || '').replace(/"/g, '""')}"`
+          `"${(caseItem.省份 || '').replace(/"/g, '""')}"`,
+          `"${(caseItem.行业 || '').replace(/"/g, '""')}"`,
+          `"${(caseItem.分类 || '').replace(/"/g, '""')}"`
         ].join(','))
       ].join('\n')
       
