@@ -192,6 +192,18 @@ export function SearchForm({ onSearch, isLoading = false }: SearchFormProps) {
             </div>
             
             <div className="space-y-2">
+              <Label htmlFor="category" className="text-foreground">案件分类</Label>
+              <Input
+                id="category"
+                type="text"
+                placeholder="输入案件分类关键词"
+                value={formData.category || ''}
+                onChange={(e) => handleInputChange('category', e.target.value)}
+                className="bg-background border-input text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            
+            <div className="space-y-2">
               <Label htmlFor="keyword" className="text-foreground">通用关键词</Label>
               <Input
                 id="keyword"

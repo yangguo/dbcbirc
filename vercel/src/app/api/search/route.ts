@@ -71,41 +71,58 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Text search filters
+    // Text search filters (single-field)
     const textFilters = [
       { field: '行政处罚决定书文号', param: searchParams.wenhao_text },
       { field: '被处罚当事人', param: searchParams.people_text },
       { field: '主要违法违规事实', param: searchParams.event_text },
       { field: '行政处罚依据', param: searchParams.law_text },
       { field: '行政处罚决定', param: searchParams.penalty_text },
-      { field: '行业', param: searchParams.industry },
-      { field: '省份', param: searchParams.province },
       { field: '标题', param: searchParams.title_text },
     ]
-    
+
+    // Accumulate AND conditions for flexible combinations
+    const andConditions: any[] = []
+
     textFilters.forEach(({ field, param }) => {
       if (param) {
-        // Split words and create regex pattern for each word
         const words = param.split(/\s+/).filter(word => word.length > 0)
         if (words.length > 0) {
           const regexPatterns = words.map(word => new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'))
           if (regexPatterns.length === 1) {
-            query[field] = regexPatterns[0]
+            andConditions.push({ [field]: regexPatterns[0] })
           } else {
-            query[field] = { $all: regexPatterns }
+            andConditions.push({ [field]: { $all: regexPatterns } })
           }
         }
       }
     })
+
+    // Multi-field synonyms: industry/行业, province/省份, category/分类
+    const addSynonymCondition = (cnField: string, enField: string, value?: string) => {
+      if (!value) return
+      const words = value.split(/\s+/).filter(w => w.length > 0)
+      if (words.length === 0) return
+      const regexPatterns = words.map(word => new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'))
+      if (regexPatterns.length === 1) {
+        andConditions.push({ $or: [ { [cnField]: regexPatterns[0] }, { [enField]: regexPatterns[0] } ] })
+      } else {
+        andConditions.push({ $or: [ { [cnField]: { $all: regexPatterns } }, { [enField]: { $all: regexPatterns } } ] })
+      }
+    }
+
+    addSynonymCondition('行业', 'industry', searchParams.industry)
+    addSynonymCondition('省份', 'province', searchParams.province)
+    addSynonymCondition('分类', 'category', searchParams.category)
     
     // Organization name filter
     if (searchParams.org_name) {
-      query['作出处罚决定的机关名称'] = new RegExp(searchParams.org_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+      andConditions.push({ '作出处罚决定的机关名称': new RegExp(searchParams.org_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') })
     }
     
     // Minimum penalty filter
     if (searchParams.min_penalty && searchParams.min_penalty > 0) {
-      query['金额'] = { $gte: searchParams.min_penalty }
+      andConditions.push({ $or: [ { '金额': { $gte: searchParams.min_penalty } }, { 'amount': { $gte: searchParams.min_penalty } } ] })
     }
     
     // General keyword search
@@ -120,23 +137,31 @@ export async function POST(request: NextRequest) {
           { '主要违法违规事实': keywordRegex },
           { '行政处罚依据': keywordRegex },
           { '行政处罚决定': keywordRegex },
-          { '作出处罚决定的机关名称': keywordRegex }
+          { '作出处罚决定的机关名称': keywordRegex },
+          // Include English synonyms so keyword can match enriched fields
+          { 'industry': keywordRegex },
+          { 'province': keywordRegex },
+          { 'category': keywordRegex }
         ]
       }
-      
-      // If there's already an $and query (from date filter), add to it
+      andConditions.push(keywordQuery)
+    }
+
+    // Merge date filter into AND conditions if present
+    if (query.$or || query.$and) {
       if (query.$and) {
-        query.$and.push(keywordQuery)
+        andConditions.push(...query.$and)
       } else if (query.$or) {
-        // If there's already an $or query (from date filter), combine them
-        query.$and = [
-          { $or: query.$or },
-          keywordQuery
-        ]
-        delete query.$or
-      } else {
-        query.$or = keywordQuery.$or
+        andConditions.push({ $or: query.$or })
       }
+      // Reset base query; we'll rebuild from andConditions
+      delete query.$or
+      delete query.$and
+    }
+
+    // Finalize query
+    if (andConditions.length > 0) {
+      query.$and = andConditions
     }
     
     // Pagination
@@ -156,36 +181,103 @@ export async function POST(request: NextRequest) {
     
     // Transform MongoDB documents to match frontend interface
     const transformedCases = cases.map((doc: any) => {
-      // Create a base object with known fields
-      const baseCase = {
-        id: doc._id?.toString() || '',
-        title: doc['标题'] || doc.title || '',
-        subtitle: doc['副标题'] || doc.subtitle || '',
-        publish_date: doc['发布日期'] || doc.publish_date || '',
-        content: doc['内容'] || doc.content || '',
-        wenhao: doc['行政处罚决定书文号'] || doc['文号'] || doc.wenhao || '',
-        people: doc['被处罚当事人'] || doc['当事人'] || doc.people || '',
-        event: doc['主要违法违规事实'] || doc['违法事实'] || doc.event || '',
-        law: doc['行政处罚依据'] || doc['法律依据'] || doc.law || '',
-        penalty: doc['行政处罚决定'] || doc['处罚决定'] || doc.penalty || '',
-        org: doc['作出处罚决定的机关名称'] || doc['机构'] || doc.org || '',
-        penalty_date: doc['作出处罚决定的日期'] || doc['处罚日期'] || doc.penalty_date || '',
-        category: doc['分类'] || doc.category || '',
-        amount: doc['金额'] || doc.amount || 0,
-        province: doc['省份'] || doc.province || '',
-        industry: doc['行业'] || doc.industry || ''
-      }
-      
-      // Add all other fields from the original document
-      const result: any = { ...baseCase }
-      Object.keys(doc).forEach(key => {
-        if (key !== '_id' && !(key in result)) {
-          result[key] = doc[key]
+      // Helper functions to extract missing fields
+      const extractProvinceFromOrg = (orgName?: string) => {
+        if (!orgName) return null
+        const provincePatterns = [
+          '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
+          '上海', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南',
+          '湖北', '湖南', '广东', '广西', '海南', '重庆', '四川', '贵州',
+          '云南', '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆'
+        ]
+        for (const province of provincePatterns) {
+          if (orgName.includes(province)) {
+            return province === '内蒙古' ? '内蒙古自治区' : 
+                   province === '广西' ? '广西壮族自治区' :
+                   province === '西藏' ? '西藏自治区' :
+                   province === '宁夏' ? '宁夏回族自治区' :
+                   province === '新疆' ? '新疆维吾尔自治区' :
+                   ['北京', '天津', '上海', '重庆'].includes(province) ? province + '市' :
+                   province + '省'
+          }
         }
-      })
-      
-      return result
-    })
+        return null
+      }
+
+      const extractIndustryFromEntity = (entityName?: string) => {
+        if (!entityName) return null
+        const industryPatterns = [
+          { keywords: ['银行', '农商银行', '村镇银行', '信用社'], industry: '银行' },
+          { keywords: ['保险', '人寿', '财险', '平安'], industry: '保险' },
+          { keywords: ['证券', '基金', '期货'], industry: '证券' },
+          { keywords: ['信托'], industry: '信托' },
+          { keywords: ['租赁'], industry: '租赁' },
+          { keywords: ['小贷', '小额贷款'], industry: '小额贷款' }
+        ]
+        for (const pattern of industryPatterns) {
+          if (pattern.keywords.some(keyword => entityName.includes(keyword))) {
+            return pattern.industry
+          }
+        }
+        return null
+      }
+
+      const extractAmountFromPenalty = (penaltyText?: string) => {
+        if (!penaltyText) return 0
+        const amountMatch = penaltyText.match(/(\d+(?:\.\d+)?)\s*万元/)
+        if (amountMatch) {
+          return parseFloat(amountMatch[1]) * 10000
+        }
+        const yuanMatch = penaltyText.match(/(\d+(?:\.\d+)?)\s*元/)
+        if (yuanMatch) {
+          return parseFloat(yuanMatch[1])
+        }
+        return 0
+      }
+
+      // Extract fields with fallbacks
+      const orgName = doc['作出处罚决定的机关名称'] || doc['机构'] || doc.org
+      const entityName = doc['被处罚当事人'] || doc['当事人'] || doc.people
+      const penaltyDecision = doc['行政处罚决定'] || doc['处罚决定'] || doc.penalty
+      const violationFact = doc['主要违法违规事实'] || doc['违法事实'] || doc.event
+
+      const result: any = {
+        // Ensure all original fields are preserved
+        ...doc,
+        
+        // Standardize key fields for consistent access
+        id: doc._id?.toString() || '',
+        
+        // Map Chinese keys to English keys, but keep original
+        标题: doc['标题'] || doc.title,
+        发布日期: doc['发布日期'] || doc.publish_date,
+        行政处罚决定书文号: doc['行政处罚决定书文号'] || doc['文号'] || doc.wenhao,
+        被处罚当事人: entityName,
+        主要违法违规事实: violationFact,
+        行政处罚依据: doc['行政处罚依据'] || doc['法律依据'] || doc.law,
+        行政处罚决定: penaltyDecision,
+        作出处罚决定的机关名称: orgName,
+        作出处罚决定的日期: doc['作出处罚决定的日期'] || doc['处罚日期'] || doc.penalty_date,
+        
+        // Enhanced field extraction with smart fallbacks
+        category: doc.category || doc['分类'] || violationFact,
+        分类: doc['分类'] || doc.category || violationFact,
+        
+        amount: doc.amount || doc['金额'] || extractAmountFromPenalty(penaltyDecision),
+        金额: doc['金额'] || doc.amount || extractAmountFromPenalty(penaltyDecision),
+        
+        province: doc.province || doc['省份'] || extractProvinceFromOrg(orgName),
+        省份: doc['省份'] || doc.province || extractProvinceFromOrg(orgName),
+        
+        industry: doc.industry || doc['行业'] || extractIndustryFromEntity(entityName),
+        行业: doc['行业'] || doc.industry || extractIndustryFromEntity(entityName),
+      };
+
+      // Remove MongoDB's _id in favor of a clean `id`
+      delete result._id;
+
+      return result;
+    });
     
     const totalPages = Math.ceil(total / pageSize)
     

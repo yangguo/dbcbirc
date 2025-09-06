@@ -23,6 +23,7 @@ export interface CaseSearchRequest {
   // Other filters
   industry?: string          // 行业
   province?: string          // 省份
+  category?: string          // 案件分类
   min_penalty?: number       // 金额 (最小值)
 
   // General keyword
@@ -51,6 +52,12 @@ export interface CaseDetail {
   金额?: number
   省份?: string
   行业?: string
+  
+  // English field names (from database)
+  amount?: number
+  province?: string
+  industry?: string
+  category?: string
 }
 
 export interface CaseSearchResponse {

@@ -39,26 +39,26 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
     setIsExporting(true)
     try {
       const headers = [
-        '标题', '文号', '处罚机关', '被处罚当事人', '处罚日期', '发布日期', 
-        '罚款金额', '违法事实', '处罚依据', '处罚决定', '省份', '行业', '分类'
+        '类别', '金额', '省份', '行业', '标题', '文号', '处罚机关', '被处罚当事人', 
+        '处罚日期', '发布日期', '违法事实', '处罚依据', '处罚决定'
       ]
       
       const csvContent = [
         headers.join(','),
         ...results.cases.map(caseItem => [
+          `"${(caseItem.分类 || caseItem.category || '').replace(/"/g, '""')}"`,
+          `"${(caseItem.金额 !== undefined && caseItem.金额 !== null && caseItem.金额 > 0) ? caseItem.金额 : ((caseItem.amount !== undefined && caseItem.amount !== null && caseItem.amount > 0) ? caseItem.amount : (caseItem['行政处罚决定'] && (caseItem['行政处罚决定'].includes('万元') || caseItem['行政处罚决定'].includes('元'))) ? (caseItem['行政处罚决定'].match(/[\d,.]+\s*[万]?元/)?.[0] || '') : '')}"`,
+          `"${(caseItem.省份 || caseItem.province || '').replace(/"/g, '""')}"`,
+          `"${(caseItem.行业 || caseItem.industry || '').replace(/"/g, '""')}"`,
           `"${(caseItem.标题 || '').replace(/"/g, '""')}"`,
           `"${(caseItem.行政处罚决定书文号 || '').replace(/"/g, '""')}"`,
           `"${(caseItem.作出处罚决定的机关名称 || '').replace(/"/g, '""')}"`,
           `"${(caseItem.被处罚当事人 || '').replace(/"/g, '""')}"`,
           `"${formatDate(caseItem.作出处罚决定的日期 || '')}"`,
           `"${formatDate(caseItem.发布日期 || '')}"`,
-          `"${caseItem.金额 ? formatAmount(caseItem.金额) : ''}"`,
           `"${(caseItem.主要违法违规事实 || '').replace(/"/g, '""')}"`,
           `"${(caseItem.行政处罚依据 || '').replace(/"/g, '""')}"`,
-          `"${(caseItem.行政处罚决定 || '').replace(/"/g, '""')}"`,
-          `"${(caseItem.省份 || '').replace(/"/g, '""')}"`,
-          `"${(caseItem.行业 || '').replace(/"/g, '""')}"`,
-          `"${(caseItem.分类 || '').replace(/"/g, '""')}"`
+          `"${(caseItem.行政处罚决定 || '').replace(/"/g, '""')}"`
         ].join(','))
       ].join('\n')
       
@@ -111,26 +111,26 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
     setIsExporting(true)
     try {
       const headers = [
-        '标题', '文号', '处罚机关', '被处罚当事人', '处罚日期', '发布日期', 
-        '罚款金额', '违法事实', '处罚依据', '处罚决定', '省份', '行业', '分类'
+        '类别', '金额', '省份', '行业', '标题', '文号', '处罚机关', '被处罚当事人', 
+        '处罚日期', '发布日期', '违法事实', '处罚依据', '处罚决定'
       ]
       
       const csvContent = [
         headers.join('\t'),
         ...results.cases.map(caseItem => [
+          (caseItem.分类 || caseItem.category || '').replace(/\t/g, ' '),
+          (caseItem.金额 !== undefined && caseItem.金额 !== null && caseItem.金额 > 0) ? caseItem.金额 : ((caseItem.amount !== undefined && caseItem.amount !== null && caseItem.amount > 0) ? caseItem.amount : (caseItem['行政处罚决定'] && (caseItem['行政处罚决定'].includes('万元') || caseItem['行政处罚决定'].includes('元'))) ? (caseItem['行政处罚决定'].match(/[\d,.]+\s*[万]?元/)?.[0] || '') : ''),
+          (caseItem.省份 || caseItem.province || '').replace(/\t/g, ' '),
+          (caseItem.行业 || caseItem.industry || '').replace(/\t/g, ' '),
           (caseItem.标题 || '').replace(/\t/g, ' '),
           (caseItem.行政处罚决定书文号 || '').replace(/\t/g, ' '),
           (caseItem.作出处罚决定的机关名称 || '').replace(/\t/g, ' '),
           (caseItem.被处罚当事人 || '').replace(/\t/g, ' '),
           formatDate(caseItem.作出处罚决定的日期 || ''),
           formatDate(caseItem.发布日期 || ''),
-          caseItem.金额 ? formatAmount(caseItem.金额) : '',
           (caseItem.主要违法违规事实 || '').replace(/\t/g, ' '),
           (caseItem.行政处罚依据 || '').replace(/\t/g, ' '),
-          (caseItem.行政处罚决定 || '').replace(/\t/g, ' '),
-          (caseItem.省份 || '').replace(/\t/g, ' '),
-          (caseItem.行业 || '').replace(/\t/g, ' '),
-          (caseItem.分类 || '').replace(/\t/g, ' ')
+          (caseItem.行政处罚决定 || '').replace(/\t/g, ' ')
         ].join('\t'))
       ].join('\n')
       
@@ -181,10 +181,54 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
   }
 
   const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat('zh-CN', {
-      style: 'currency',
-      currency: 'CNY'
-    }).format(amount)
+    // 不转换成货币格式，直接返回数字
+    return amount.toLocaleString('zh-CN')
+  }
+
+  // 从机构名称提取省份
+  const extractProvinceFromOrg = (orgName?: string) => {
+    if (!orgName) return null
+    
+    const provincePatterns = [
+      '北京', '天津', '河北', '山西', '内蒙古', '辽宁', '吉林', '黑龙江',
+      '上海', '江苏', '浙江', '安徽', '福建', '江西', '山东', '河南',
+      '湖北', '湖南', '广东', '广西', '海南', '重庆', '四川', '贵州',
+      '云南', '西藏', '陕西', '甘肃', '青海', '宁夏', '新疆'
+    ]
+    
+    for (const province of provincePatterns) {
+      if (orgName.includes(province)) {
+        return province === '内蒙古' ? '内蒙古自治区' : 
+               province === '广西' ? '广西壮族自治区' :
+               province === '西藏' ? '西藏自治区' :
+               province === '宁夏' ? '宁夏回族自治区' :
+               province === '新疆' ? '新疆维吾尔自治区' :
+               ['北京', '天津', '上海', '重庆'].includes(province) ? province + '市' :
+               province + '省'
+      }
+    }
+    return null
+  }
+
+  // 从当事人名称提取行业信息
+  const extractIndustryFromEntity = (entityName?: string) => {
+    if (!entityName) return null
+    
+    const industryPatterns = [
+      { keywords: ['银行', '农商银行', '村镇银行', '信用社'], industry: '银行' },
+      { keywords: ['保险', '人寿', '财险', '平安'], industry: '保险' },
+      { keywords: ['证券', '基金', '期货'], industry: '证券' },
+      { keywords: ['信托'], industry: '信托' },
+      { keywords: ['租赁'], industry: '租赁' },
+      { keywords: ['小贷', '小额贷款'], industry: '小额贷款' }
+    ]
+    
+    for (const pattern of industryPatterns) {
+      if (pattern.keywords.some(keyword => entityName.includes(keyword))) {
+        return pattern.industry
+      }
+    }
+    return null
   }
 
   return (
@@ -224,7 +268,19 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
         </div>
       </div>
       
-      <div className="grid gap-4">
+      <div className="space-y-4">
+        {/* Debug information - remove this in production */}
+        {process.env.NODE_ENV === 'development' && results.cases.length > 0 && (
+          <div className="bg-yellow-50 dark:bg-yellow-950/20 p-3 rounded-lg border">
+            <details>
+              <summary className="cursor-pointer text-sm font-medium">调试信息 (仅开发环境显示)</summary>
+              <pre className="mt-2 text-xs overflow-auto">
+                {JSON.stringify(results.cases[0], null, 2)}
+              </pre>
+            </details>
+          </div>
+        )}
+        
         {results.cases.map((caseItem: CaseDetail, index: number) => {
           const isExpanded = expandedItems.has(index)
           return (
@@ -246,41 +302,68 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {/* 基本信息网格 */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3 bg-muted/30 rounded-lg">
-                  {(caseItem.行政处罚决定书文号) && (
-                    <div className="text-sm">
-                      <span className="font-medium text-foreground">文号：</span>
-                      <div className="text-muted-foreground">{caseItem.行政处罚决定书文号}</div>
-                    </div>
-                  )}
-                  
-                  {(caseItem.作出处罚决定的日期) && (
-                    <div className="text-sm">
-                      <span className="font-medium text-foreground">处罚日期：</span>
-                      <div className="text-muted-foreground">
-                        {formatDate(caseItem.作出处罚决定的日期 || '')}
+                {/* 核心信息表格 - 突出显示类别、金额、省份、行业 */}
+                <div className="bg-muted/30 rounded-lg overflow-hidden">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border-b border-border/50">
+                    <div className="p-3 border-r border-border/50 bg-accent/20">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">类别</div>
+                      <div className="mt-1 text-sm font-medium text-foreground">
+                        {caseItem.category || caseItem.分类 || caseItem['主要违法违规事实'] || '-'}
                       </div>
                     </div>
-                  )}
-                  
-                  {(caseItem.发布日期) && (
-                    <div className="text-sm">
-                      <span className="font-medium text-foreground">发布日期：</span>
-                      <div className="text-muted-foreground">
-                        {formatDate(caseItem.发布日期 || '')}
+                    <div className="p-3 border-r border-border/50 md:border-r-0 bg-accent/20">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">金额</div>
+                      <div className="mt-1 text-sm font-semibold text-destructive">
+                        {(caseItem.amount !== undefined && caseItem.amount !== null && caseItem.amount > 0) 
+                          ? formatAmount(caseItem.amount) 
+                          : (caseItem.金额 !== undefined && caseItem.金额 !== null && caseItem.金额 > 0)
+                            ? formatAmount(caseItem.金额)
+                            : (caseItem['行政处罚决定'] && (caseItem['行政处罚决定'].includes('万元') || caseItem['行政处罚决定'].includes('元')))
+                              ? caseItem['行政处罚决定'].match(/[\d,.]+\s*[万]?元/)?.[0] || caseItem['行政处罚决定']
+                              : '-'}
                       </div>
                     </div>
-                  )}
-                  
-                  {(caseItem.金额) && (
-                    <div className="text-sm">
-                      <span className="font-medium text-foreground">罚款金额：</span>
-                      <div className="text-destructive font-semibold">
-                        {formatAmount(caseItem.金额 || 0)}
+                    <div className="p-3 border-r border-border/50 bg-accent/20">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">省份</div>
+                      <div className="mt-1 text-sm font-medium text-foreground">
+                        {caseItem.province || caseItem.省份 || extractProvinceFromOrg(caseItem.作出处罚决定的机关名称) || '-'}
                       </div>
                     </div>
-                  )}
+                    <div className="p-3 bg-accent/20">
+                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">行业</div>
+                      <div className="mt-1 text-sm font-medium text-foreground">
+                        {caseItem.industry || caseItem.行业 || extractIndustryFromEntity(caseItem.被处罚当事人) || '-'}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 其他基本信息 */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3">
+                    {(caseItem.行政处罚决定书文号) && (
+                      <div className="text-sm">
+                        <span className="font-medium text-foreground">文号：</span>
+                        <div className="text-muted-foreground">{caseItem.行政处罚决定书文号}</div>
+                      </div>
+                    )}
+                    
+                    {(caseItem.作出处罚决定的日期) && (
+                      <div className="text-sm">
+                        <span className="font-medium text-foreground">处罚日期：</span>
+                        <div className="text-muted-foreground">
+                          {formatDate(caseItem.作出处罚决定的日期 || '')}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {(caseItem.发布日期) && (
+                      <div className="text-sm">
+                        <span className="font-medium text-foreground">发布日期：</span>
+                        <div className="text-muted-foreground">
+                          {formatDate(caseItem.发布日期 || '')}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 {/* 当事人信息 */}
@@ -394,19 +477,19 @@ export function SearchResults({ results, isLoading, onLoadMore }: SearchResultsP
               
                 {/* 标签区域 */}
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
-                  {caseItem.省份 && (
+                  {(caseItem.省份 || caseItem.province) && (
                     <span className="inline-flex items-center bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs px-2 py-1 rounded-full">
-                      📍 {caseItem.省份}
+                      📍 {caseItem.省份 || caseItem.province}
                     </span>
                   )}
-                  {caseItem.行业 && (
+                  {(caseItem.行业 || caseItem.industry) && (
                     <span className="inline-flex items-center bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs px-2 py-1 rounded-full">
-                      🏢 {caseItem.行业}
+                      🏢 {caseItem.行业 || caseItem.industry}
                     </span>
                   )}
-                  {caseItem.分类 && (
+                  {(caseItem.分类 || caseItem.category) && (
                     <span className="inline-flex items-center bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 text-xs px-2 py-1 rounded-full">
-                      📂 {caseItem.分类}
+                      📂 {caseItem.分类 || caseItem.category}
                     </span>
                   )}
 
