@@ -45,6 +45,11 @@ interface DiffDataItem {
   penalty_decision: string
   authority_name: string
   decision_date: string
+  // New fields added based on dbcbirc.py uplink_cbircsum function
+  amount?: number
+  industry?: string
+  category?: string
+  province?: string
 }
 
 export function CaseOnline() {
@@ -313,6 +318,10 @@ export function CaseOnline() {
                     <TableHead>被处罚方</TableHead>
                     <TableHead>处罚机关</TableHead>
                     <TableHead>决定日期</TableHead>
+                    <TableHead>罚款金额</TableHead>
+                    <TableHead>行业类型</TableHead>
+                    <TableHead>案件类型</TableHead>
+                    <TableHead>处罚地区</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -332,6 +341,18 @@ export function CaseOnline() {
                         {item.authority_name}
                       </TableCell>
                       <TableCell>{formatDate(item.decision_date)}</TableCell>
+                      <TableCell>
+                        {item.amount ? `${(item.amount / 10000).toFixed(2)}万元` : '-'}
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate" title={item.industry}>
+                        {item.industry || '-'}
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate" title={item.category}>
+                        {item.category || '-'}
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate" title={item.province}>
+                        {item.province || '-'}
+                      </TableCell>
                     </TableRow>
                   )) : null}
                 </TableBody>

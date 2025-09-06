@@ -198,6 +198,11 @@ async def get_online_stats():
             else:
                 merged_df = analysis_df_dedup.copy()
             
+            # 然后合并分类数据（包含新增字段）(对应uplink_cbircsum中的alldf = pd.merge(alldf, amountdf, on="id", how="left"))
+            if not category_df_dedup.empty:
+                merged_df = pd.merge(merged_df, category_df_dedup, on="id", how="left")
+                logger.info("Merged category data with new fields for stats calculation")
+            
             # Get online data with timeout - try to get IDs only for better performance
             online_data_list = await get_online_data_with_timeout(timeout=20)  # Increased timeout
             
@@ -268,9 +273,10 @@ async def get_case_diff_data():
             logger.warning("Database not connected")
             return []
         
-        # Get case detail and analysis data
+        # Get case detail, analysis data, and category data
         detail_df = await case_service.get_case_detail("")
         analysis_df = await case_service.get_case_analysis("")
+        category_df = await case_service.get_case_categories()  # Get category data with new fields
         
         if detail_df.empty:
             return []
@@ -279,6 +285,11 @@ async def get_case_diff_data():
         merged_df = detail_df.copy()
         if not analysis_df.empty:
             merged_df = pd.merge(merged_df, analysis_df, on="id", how="left")
+        
+        # Merge with category data (containing new fields: amount, industry, category, province)
+        if not category_df.empty:
+            merged_df = pd.merge(merged_df, category_df, on="id", how="left")
+            logger.info("Merged category data with new fields for diff data")
         
         # Get online data from MongoDB with timeout
         online_data_list = await get_online_data_with_timeout(timeout=20)
@@ -311,7 +322,12 @@ async def get_case_diff_data():
                 "legal_basis": str(row.get("law", row.get("法律依据", ""))),
                 "penalty_decision": str(row.get("penalty", row.get("处罚决定", ""))),
                 "authority_name": str(row.get("org", row.get("机关名称", ""))),
-                "decision_date": str(row.get("penalty_date", row.get("作出处罚决定的日期", "")))
+                "decision_date": str(row.get("penalty_date", row.get("作出处罚决定的日期", ""))),
+                # Add new fields from category data
+                "amount": float(row.get("amount", 0)) if pd.notna(row.get("amount")) else 0,
+                "industry": str(row.get("industry", "")),
+                "category": str(row.get("category", "")),
+                "province": str(row.get("province", ""))
             }
             diff_data.append(diff_item)
         
@@ -336,9 +352,10 @@ async def update_online_cases():
             logger.warning("Database not connected")
             raise HTTPException(status_code=503, detail="Database not connected")
         
-        # Get case detail and analysis data
+        # Get case detail, analysis data, and category data
         detail_df = await case_service.get_case_detail("")
         analysis_df = await case_service.get_case_analysis("")
+        category_df = await case_service.get_case_categories()  # Get category data with new fields
         
         if detail_df.empty:
             return {
@@ -352,6 +369,11 @@ async def update_online_cases():
         merged_df = detail_df.copy()
         if not analysis_df.empty:
             merged_df = pd.merge(merged_df, analysis_df, on="id", how="left")
+        
+        # Merge with category data (containing new fields: amount, industry, category, province)
+        if not category_df.empty:
+            merged_df = pd.merge(merged_df, category_df, on="id", how="left")
+            logger.info("Merged category data with new fields: amount, industry, category, province")
         
         try:
             collection = db_manager.get_collection("cbircanalysis")
@@ -377,15 +399,24 @@ async def update_online_cases():
             diff_data_df = diff_data_df.drop_duplicates(subset=["id"])
             
             # Select and rename columns to match MongoDB structure (following dbcbirc.py uplink_cbircsum logic)
-            required_columns = [
+            base_columns = [
                 "标题", "文号", "发布日期", "id", "wenhao", "people", "event", "law", "penalty", "org", "date"
             ]
+            
+            # Add new fields to column list if they exist
+            additional_columns = []
+            for col in ["amount", "industry", "category", "province"]:
+                if col in diff_data_df.columns:
+                    additional_columns.append(col)
+            
+            # Combine base and additional columns
+            required_columns = base_columns + additional_columns
             
             # Filter to only include required columns that exist
             available_columns = [col for col in required_columns if col in diff_data_df.columns]
             diff_data_selected = diff_data_df[available_columns].copy()
             
-            # Rename columns to Chinese field names for MongoDB
+            # Rename columns to Chinese field names for MongoDB (base fields mapping)
             column_mapping = {
                 "wenhao": "行政处罚决定书文号",
                 "people": "被处罚当事人", 
@@ -393,11 +424,21 @@ async def update_online_cases():
                 "law": "行政处罚依据",
                 "penalty": "行政处罚决定",
                 "org": "作出处罚决定的机关名称",
-                "date": "作出处罚决定的日期"
+                "date": "作出处罚决定的日期",
+                # New fields keep original names, no renaming needed
+                "amount": "amount",
+                "industry": "industry", 
+                "category": "category",
+                "province": "province"
             }
             
-            # Apply column renaming
-            diff_data_renamed = diff_data_selected.rename(columns=column_mapping)
+            # Apply column renaming only for existing columns
+            rename_dict = {k: v for k, v in column_mapping.items() if k in diff_data_selected.columns}
+            diff_data_renamed = diff_data_selected.rename(columns=rename_dict)
+            
+            # Log information about included new fields
+            if additional_columns:
+                logger.info(f"Update includes new fields: {', '.join(additional_columns)}")
             
             # Convert date columns to datetime if they exist
             if "发布日期" in diff_data_renamed.columns:

@@ -1677,11 +1677,29 @@ def download_cbircsum(org_namels):
 
 def get_cbirccat():
     amtdf = get_csvdf(pencbirc, "cbirccat")
-    # process amount
-    amtdf["amount"] = amtdf["amount"].astype(float)
-    # rename columns law to lawlist
-    amtdf.rename(columns={"law": "lawlist"}, inplace=True)
-    # return amtdf[["id", "amount"]]
+    
+    # process amount field - convert to float
+    if "amount" in amtdf.columns:
+        amtdf["amount"] = pd.to_numeric(amtdf["amount"], errors="coerce")
+    
+    # process province field - normalize province names
+    if "province" in amtdf.columns:
+        amtdf["province"] = amtdf["province"].apply(
+            lambda x: normalize_province_name(str(x)) if pd.notna(x) and str(x).strip() else ""
+        )
+    
+    # process industry field - clean and standardize
+    if "industry" in amtdf.columns:
+        amtdf["industry"] = amtdf["industry"].fillna("").astype(str)
+    
+    # process category field - clean and standardize
+    if "category" in amtdf.columns:
+        amtdf["category"] = amtdf["category"].fillna("").astype(str)
+    
+    # rename columns law to lawlist (if exists)
+    if "law" in amtdf.columns:
+        amtdf.rename(columns={"law": "lawlist"}, inplace=True)
+    
     return amtdf
 
 
@@ -2097,35 +2115,7 @@ def uplink_cbircsum():
     # drop duplicate by id
     eventdf.drop_duplicates(subset=["id"], inplace=True)
 
-    # detailname
-    # detailname = "cbircdtlall" + get_nowdate() + ".csv"
-
-    # download lawdf data
-    # lawdf = get_lawcbirc()
-    # # get lengh
-    # lawlen = len(lawdf)
-    # st.write("法律数据量：" + str(lawlen))
-    # # get id nunique
-    # lawidn = lawdf["id"].nunique()
-    # st.write("法律数据id数：" + str(lawidn))
-
-    # lawname
-    # lawname = "cbirclawdf" + get_nowdate() + ".csv"
-
-    # download label data
-    # labeldf = get_cbirclabel()
-    # # get lengh
-    # labellen = len(labeldf)
-    # st.write("标签数据量：" + str(labellen))
-    # # get id nunique
-    # labelidn = labeldf["id"].nunique()
-    # st.write("标签数据id数：" + str(labelidn))
-    # # drop duplicate by id
-    # labeldf.drop_duplicates(subset=["id"], inplace=True)
-
-    # labelname = "cbirclabel" + get_nowdate() + ".csv"
-
-    # download amount data
+    # download amount data (包含新增字段: amount, industry, category, province)
     amountdf = get_cbirccat()
     # get lengh
     amountlen = len(amountdf)
@@ -2135,19 +2125,6 @@ def uplink_cbircsum():
     st.write("分类数据id数：" + str(amountidn))
     # drop duplicate by id
     amountdf.drop_duplicates(subset=["id"], inplace=True)
-    # amountname = "cbircamt" + get_nowdate() + ".csv"
-
-    # download people data
-    # litdf = get_cbirclitigant()
-    # # get lengh
-    # litlen = len(litdf)
-    # st.write("当事人数据量：" + str(litlen))
-    # # get id nunique
-    # lenlit = len(litdf["id"].unique())
-    # st.write("当事人数据id数：" + str(lenlit))
-    # # drop duplicate by id
-    # litdf.drop_duplicates(subset=["id"], inplace=True)
-    # litname = "cbirclitigant" + get_nowdate() + ".csv"
 
     # download analysis data
     analysisdf = get_cbircanalysis("")
@@ -2178,59 +2155,80 @@ def uplink_cbircsum():
     # display online data
     st.write("在线案例数据量：" + str(online_id))
 
-    # combine all data
+    # combine all data - 首先合并分析数据和事件数据
     alldf = pd.merge(analysisdf, eventdf, on="id", how="left")
+    
+    # 然后合并分类数据（包含新增字段）
+    if not amountdf.empty:
+        # 合并分类数据，包含amount, industry, category, province等新增字段
+        alldf = pd.merge(alldf, amountdf, on="id", how="left")
+        st.write("已合并分类数据，包含新增字段：amount, industry, category, province")
+    
     # get different data
-    # diff_data = analysisdf[~analysisdf["id"].isin(online_data["id"])]
     diff_data = alldf[~alldf["id"].isin(online_data["id"])]
 
-    # display different data
-    # st.write(diff_data)
-    # Concatenate lists from 'orgls' and 'peoplels' columns and join into a string
-    # litdf["people"] = litdf.apply(
-    #     lambda row: ", ".join(row["orgls"] + row["peoplels"]), axis=1
-    # )
-
-    # update people column
-    # diff_data2 = pd.merge(diff_data, litdf, on="id")
-    # diff_data2["被处罚当事人"] = diff_data2["people"]
-    diff_data3 = diff_data[
-        [
-            "标题",
-            "文号",
-            "发布日期",
-            "id",
-            "wenhao",
-            "people",
-            "event",
-            "law",
-            "penalty",
-            "org",
-            "date",
-        ]
-    ]
-    # update column names
-    diff_data3.columns = [
+    # 准备上线数据的列，包含新增字段
+    base_columns = [
         "标题",
-        "文号",
+        "文号", 
         "发布日期",
         "id",
-        "行政处罚决定书文号",
-        "被处罚当事人",
-        "主要违法违规事实",
-        "行政处罚依据",
-        "行政处罚决定",
-        "作出处罚决定的机关名称",
-        "作出处罚决定的日期",
+        "wenhao",
+        "people",
+        "event",
+        "law",
+        "penalty",
+        "org",
+        "date",
     ]
-    # summarize null values
-    # st.write(diff_data3.isnull().sum())
+    
+    # 添加新增字段到列列表中（如果存在的话）
+    additional_columns = []
+    for col in ["amount", "industry", "category", "province"]:
+        if col in diff_data.columns:
+            additional_columns.append(col)
+    
+    # 选择要包含的列
+    selected_columns = base_columns + additional_columns
+    available_columns = [col for col in selected_columns if col in diff_data.columns]
+    
+    diff_data3 = diff_data[available_columns]
+    
+    # update column names - 基础列名映射
+    column_mapping = {
+        "标题": "标题",
+        "文号": "文号",
+        "发布日期": "发布日期",
+        "id": "id",
+        "wenhao": "行政处罚决定书文号",
+        "people": "被处罚当事人",
+        "event": "主要违法违规事实",
+        "law": "行政处罚依据",
+        "penalty": "行政处罚决定",
+        "org": "作出处罚决定的机关名称",
+        "date": "作出处罚决定的日期",
+        # 新增字段保持原名，不进行重命名
+        "amount": "amount",
+        "industry": "industry", 
+        "category": "category",
+        "province": "province"
+    }
+    
+    # 只重命名存在的列
+    rename_dict = {k: v for k, v in column_mapping.items() if k in diff_data3.columns}
+    diff_data3 = diff_data3.rename(columns=rename_dict)
+    
     # filter out "" values
-    diff_data4 = diff_data3[diff_data3["主要违法违规事实"].notnull()]
+    # create a real copy to avoid chained assignment warnings
+    diff_data4 = diff_data3[diff_data3["主要违法违规事实"].notnull()].copy()
     # convert date to datetime
-    diff_data4["发布日期"] = pd.to_datetime(diff_data4["发布日期"])
+    diff_data4.loc[:, "发布日期"] = pd.to_datetime(diff_data4["发布日期"])
     # fillna
     diff_data4 = diff_data4.fillna("")
+    
+    # 显示包含的新增字段信息
+    if additional_columns:
+        st.info(f"本次上线数据包含新增字段：{', '.join(additional_columns)}")
 
     # download different data
     st.download_button(
@@ -2246,4 +2244,4 @@ def uplink_cbircsum():
     # Insert data into the MongoDB collection
     if st.button("更新上线案例数据"):
         insert_data(diff_data4, collection)
-        st.success("更新案例数据上线成功！")
+        st.success("更新案例数据上线成功！包含新增字段数据已同步到MongoDB")
